@@ -415,6 +415,38 @@ static struct namelen *dirlist_match(char *s,char *e,struct namelen *list)
   char *name;
   size_t len;
 
+#ifdef SYNTAX_MERLIN_DELIMITERS
+  /* Special case for Merlin <<< delimiter (non-alphanumeric) */
+  if (s[0]=='<' && s[1]=='<' && s[2]=='<') {
+    /* Check if preceded by whitespace or start of line */
+    if ((isspace((unsigned char)*(s-1)) || *(s-1)=='\0') &&
+        (isspace((unsigned char)s[3]) || s[3]=='\0')) {
+      /* Search for "<<<" in the list */
+      while (len = list->len) {
+        if (len==3 && !strnicmp(list->name,"<<<",3))
+          return list;
+        list++;
+      }
+    }
+    return NULL;
+  }
+
+  /* Special case for Merlin --^ delimiter (non-alphanumeric) */
+  if (s[0]=='-' && s[1]=='-' && s[2]=='^') {
+    /* Check if preceded by whitespace or start of line */
+    if ((isspace((unsigned char)*(s-1)) || *(s-1)=='\0') &&
+        (isspace((unsigned char)s[3]) || s[3]=='\0')) {
+      /* Search for "--^" in the list */
+      while (len = list->len) {
+        if (len==3 && !strnicmp(list->name,"--^",3))
+          return list;
+        list++;
+      }
+    }
+    return NULL;
+  }
+#endif
+
   if (!ISIDSTART(*s) || (!isspace((unsigned char )*(s-1)) && *(s-1)!='\0'))
     return NULL;  /* cannot be start of directive */
 

@@ -16,7 +16,8 @@ enum {
   BINFMT_ORICMC,        /* Oric machine code file */
   BINFMT_ORICMCX,       /* Oric machine code file auto-exec */
   BINFMT_FOENIXPGX,     /* C256 Foenix single-section format */
-  BINFMT_FOENIXPGZ      /* C256 Foenix multi-section format */
+  BINFMT_FOENIXPGZ,     /* C256 Foenix multi-section format */
+  BINFMT_RW18           /* Apple II RW18 format (crackle compatible) */
 };
 
 static int binfmt = BINFMT_RAW;
@@ -179,6 +180,26 @@ static void write_output(FILE *f,section *sec,symbol *sym)
       }
       fw8(f,0);
       break;
+
+#if defined(SYNTAX_MERLIN_DELIMITERS)
+    case BINFMT_RW18:
+      /* Apple II RW18 disk format header (crackle compatible):
+       * 00-03: signature "USR\x1a"
+       * 04-05: side (little-endian) - 0xa9=side1, 0xad=side2, 0x79=side3
+       * 06-07: track (little-endian) - 0-34
+       * 08-09: offset (little-endian) - intra-track offset 0-4607
+       * 10-11: length (little-endian) - patched after writing content
+       */
+      if (get_merlin_usr_valid()) {
+        fw8(f,'U'); fw8(f,'S'); fw8(f,'R'); fw8(f,0x1a);
+        fw16(f,get_merlin_usr_side(),0);
+        fw16(f,get_merlin_usr_track(),0);
+        fw16(f,get_merlin_usr_offset(),0);
+        hdroffs = ftell(f);  /* remember location of length */
+        fw16(f,0,0);         /* skip length, will be patched later */
+      }
+      break;
+#endif
   }
 
   for (slp=seclist; nsecs>0; nsecs--) {
@@ -286,6 +307,15 @@ static void write_output(FILE *f,section *sec,symbol *sym)
       fseek(f,hdroffs,SEEK_SET);
       fw16(f,pc-1,1);  /* last address of file */
       break;
+
+#if defined(SYNTAX_MERLIN_DELIMITERS)
+    case BINFMT_RW18:
+      if (get_merlin_usr_valid()) {
+        fseek(f,hdroffs,SEEK_SET);
+        fw16(f,pc-sec->org,0);  /* total binary length */
+      }
+      break;
+#endif
   }
 
   myfree(seclist);
@@ -355,6 +385,12 @@ static int output_args(char *p)
     binfmt = BINFMT_ORICMCX;
     return 1;
   }
+#if defined(SYNTAX_MERLIN_DELIMITERS)
+  else if (!strcmp(p,"-rw18")) {
+    binfmt = BINFMT_RW18;
+    return 1;
+  }
+#endif
   return 0;
 }
 
