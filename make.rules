@@ -32,6 +32,15 @@ $(VASMEXE): $(OBJS)
 $(VOBJDMPEXE): $(VODOBJS)
 	$(LD) $(VODOBJS) $(LDFLAGS) $(LDOUT)$(VOBJDMPEXE)
 
+# Run syntax module tests (requires Python 3)
+# Usage: make CPU=6502 SYNTAX=scasm test
+test: $(VASMEXE)
+	@python3 tests/run_tests.py $(SYNTAX) -a ./$(VASMEXE)
+
+# Run tests with verbose output
+test-verbose: $(VASMEXE)
+	@python3 tests/run_tests.py $(SYNTAX) -a ./$(VASMEXE) -v
+
 clean:
 	$(RM) $(OBJS) $(VASMEXE) $(VODOBJS) $(VOBJDMPEXE)
 
