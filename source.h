@@ -77,5 +77,6 @@ source *include_source(char *);
 void include_binary_file(char *,size_t,size_t);
 void source_debug_init(int,void *);
 struct include_path *new_include_path(char *);
+char *locate_file_with_extensions(const char *);
 
 #endif /* SOURCE_H */

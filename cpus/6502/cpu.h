@@ -144,3 +144,4 @@ enum {
 extern uint16_t cpu_type;
 int cpu_available(int);
 int parse_cpu_label(char *,char **);
+int set_cpu_type(const char *);

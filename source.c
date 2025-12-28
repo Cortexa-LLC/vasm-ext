@@ -411,3 +411,51 @@ struct include_path *new_include_path(char *pathname)
   }
   return first_incpath = new_ipath_node(pathname);
 }
+
+
+/* Try to locate a file with source extensions (.s, .S, .asm, .ASM)
+   using include paths. Returns allocated filename if found, NULL otherwise. */
+char *locate_file_with_extensions(const char *basename)
+{
+  static const char *exts[] = { "", ".s", ".S", ".asm", ".ASM", NULL };
+  struct include_path *ipath;
+  FILE *f;
+  int i;
+  char *testname;
+  size_t baselen = strlen(basename);
+
+  for (i = 0; exts[i] != NULL; i++) {
+    size_t extlen = strlen(exts[i]);
+    size_t namelen = baselen + extlen + 1;
+
+    /* Try in current directory first */
+    testname = mymalloc(namelen);
+    strcpy(testname, basename);
+    strcat(testname, exts[i]);
+    if ((f = fopen(testname, "r")) != NULL) {
+      fclose(f);
+      return testname;
+    }
+    myfree(testname);
+
+    /* Try in each include path */
+    for (ipath = first_incpath; ipath; ipath = ipath->next) {
+      size_t pathlen = strlen(ipath->path);
+      size_t fulllen = pathlen + namelen + 1;  /* path + name + ext + nul */
+      char *fullpath = mymalloc(fulllen);
+
+      /* Include paths already end with separator (from new_include_path) */
+      strcpy(fullpath, ipath->path);
+      strcat(fullpath, basename);
+      strcat(fullpath, exts[i]);
+
+      if ((f = fopen(fullpath, "r")) != NULL) {
+        fclose(f);
+        return fullpath;
+      }
+      myfree(fullpath);
+    }
+  }
+
+  return NULL;  /* Not found */
+}
