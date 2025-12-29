@@ -795,6 +795,27 @@ static void apply_delimiter_highbit(dblock *db, char delim)
 }
 
 
+/* Helper function: Parse string handling single-char case
+   parse_string() returns NULL for single-char strings, so we handle them manually */
+static dblock *parse_merlin_string(char **sp, char delim)
+{
+  char *s = *sp;
+  dblock *db = parse_string(sp, delim, 8);
+
+  if (db == NULL) {
+    /* Check for single-char string: delimiter + char + delimiter */
+    if (s[0] && s[1] && s[2] == delim) {
+      db = new_dblock();
+      db->size = 1;
+      db->data = mymalloc(1);
+      db->data[0] = (unsigned char)s[1];
+      *sp = s + 3;  /* skip past delimiter + char + delimiter */
+    }
+  }
+  return db;
+}
+
+
 static void handle_spc64(char *s)
 {
   handle_space(s,64);
@@ -892,10 +913,14 @@ static void handle_as(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
         apply_delimiter_highbit(db, delim);  /* Apply delimiter rule */
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -928,12 +953,16 @@ static void handle_az(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
         apply_delimiter_highbit(db, delim);  /* Apply delimiter rule */
         add_atom(0,new_data_atom(db,1));
         /* Add zero terminator as separate space atom */
         add_atom(0,new_space_atom(number_expr(1),1,0));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -956,11 +985,9 @@ static void handle_az(char *s)
 /* Merlin DCI directive - ASCII with high bit inverted on last character */
 static void handle_at(char *s)
 {
-  char *opstart;
   dblock *db;
 
   for (;;) {
-    opstart = s;
     s = skip(s);
 
     if (ISEOL(s))
@@ -969,13 +996,17 @@ static void handle_at(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db && db->size > 0) {
         /* Apply delimiter rule first */
         apply_delimiter_highbit(db, delim);
         /* Then invert high bit on last character (XOR 0x80) */
         db->data[db->size - 1] ^= 0x80;
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -1009,12 +1040,16 @@ static void handle_inv(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
         /* Set high bit on all characters */
         for (i = 0; i < db->size; i++)
           db->data[i] |= 0x80;
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -1048,7 +1083,7 @@ static void handle_fls(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
         /* Apply delimiter rule first */
         apply_delimiter_highbit(db, delim);
@@ -1058,6 +1093,10 @@ static void handle_fls(char *s)
             db->data[i] ^= 0x80;
         }
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -1091,7 +1130,7 @@ static void handle_rev(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
         /* Apply delimiter rule first */
         apply_delimiter_highbit(db, delim);
@@ -1102,6 +1141,10 @@ static void handle_rev(char *s)
           db->data[db->size - 1 - i] = temp;
         }
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -1134,18 +1177,23 @@ static void handle_str(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
+        unsigned char len;
         /* Apply delimiter rule */
         apply_delimiter_highbit(db, delim);
         /* Add 1-byte length prefix */
-        unsigned char len = (db->size > 255) ? 255 : db->size;
+        len = (db->size > 255) ? 255 : db->size;
         lendb = new_dblock();
         lendb->size = 1;
         lendb->data = mymalloc(1);
         lendb->data[0] = len;
         add_atom(0,new_data_atom(lendb,1));
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
@@ -1178,12 +1226,13 @@ static void handle_strl(char *s)
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
-      db = parse_string(&s,delim,8);
+      db = parse_merlin_string(&s,delim);
       if (db) {
+        unsigned short len;
         /* Apply delimiter rule */
         apply_delimiter_highbit(db, delim);
         /* Add 2-byte length prefix (little-endian) */
-        unsigned short len = (db->size > 65535) ? 65535 : db->size;
+        len = (db->size > 65535) ? 65535 : db->size;
         lendb = new_dblock();
         lendb->size = 2;
         lendb->data = mymalloc(2);
@@ -1191,6 +1240,10 @@ static void handle_strl(char *s)
         lendb->data[1] = (len >> 8) & 0xFF; /* high byte */
         add_atom(0,new_data_atom(lendb,1));
         add_atom(0,new_data_atom(db,1));
+      }
+      else {
+        syntax_error(30);  /* missing closing delimiter for string */
+        return;
       }
     }
     else {
