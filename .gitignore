@@ -1,0 +1,25 @@
+# Build artifacts
+obj/
+*.o
+vasm6502_*
+vasm6800_*
+vasm6809_*
+vasmarm_*
+vasmc16x_*
+vasmhans_*
+vasmjagrisc_*
+vasmm68k_*
+vasmppc_*
+vasmqnice_*
+vasmspc700_*
+vasmtest_*
+vasmtr3200_*
+vasmvidcore_*
+vasmx86_*
+vobjdump
+
+# Temporary directories
+vasm-upstream-temp/
+
+# Scripts for maintenance (keep tracked)
+!*.sh
