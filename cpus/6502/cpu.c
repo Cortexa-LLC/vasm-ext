@@ -129,9 +129,19 @@ int parse_operand(char *p,int len,operand *op,int required)
       case IMMEDX:
       case IMMED8:
       case IMMED16:
+#ifdef SYNTAX_SUPPORTS_SCASM_OPS
+        /* SCASM: '/' (high-byte) and '\' (low-byte) also indicate immediate mode */
+        if ((*p!='#' && *p!='/' && *p!='\\') || indir)
+          return PO_NOMATCH;
+        if (*p == '#')
+          p = skip(++p);
+        /* Note: '/' and '\' are NOT skipped here - they'll be processed below
+           as byte-selector prefixes that set OF_HI or OF_LO flags */
+#else
         if (*p!='#' || indir)
           return PO_NOMATCH;
         p = skip(++p);
+#endif
       case DATAOP:
 #ifdef SYNTAX_SUPPORTS_SCASM_OPS
         /* SCASM: optional # prefix in data directives for 8-bit values */
