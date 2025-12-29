@@ -719,7 +719,13 @@ size_t chk_sec_overlap(section *s)
   size_t nsecs;
 
   for (nsecs=0; s!=NULL; s=s->next) {
+    /* skip unallocated sections (e.g., .DUMMY/.DSECT) - no output generated */
+    if (s->flags & UNALLOCATED)
+      continue;
     for (s2=s->next; s2; s2=s2->next) {
+      /* skip unallocated sections in overlap check */
+      if (s2->flags & UNALLOCATED)
+        continue;
       if (((ULLTADDR(s2->org) >= ULLTADDR(s->org) &&
             ULLTADDR(s2->org) < ULLTADDR(s->pc)) ||
            (ULLTADDR(s2->pc) > ULLTADDR(s->org) &&

@@ -40,3 +40,4 @@
   "invalid expression in .DA directive",ERROR,
   "invalid binary digit (must be 0 or 1)",ERROR,                     /* 40 */
   "undefined macro",ERROR,
+  ".TA directive ignored in cross-assembly (no effect)",WARNING,

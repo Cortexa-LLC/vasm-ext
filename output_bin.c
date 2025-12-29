@@ -66,9 +66,18 @@ static void write_output(FILE *f,section *sec,symbol *sym)
   nsecs = chk_sec_overlap(sec);
 
   /* make an array of section pointers, sorted by their start address */
+  /* skip unallocated sections (e.g., .DUMMY/.DSECT) and empty sections */
   seclist = (section **)mymalloc(nsecs * sizeof(section *));
-  for (s=sec,slp=seclist; s!=NULL; s=s->next)
+  for (s=sec,slp=seclist; s!=NULL; s=s->next) {
+    /* skip unallocated sections - no output generated */
+    if (s->flags & UNALLOCATED)
+      continue;
+    /* skip empty sections (pc == org means no content generated) */
+    if (s->pc == s->org)
+      continue;
     *slp++ = s;
+  }
+  nsecs = slp - seclist;  /* update count to actual sections added */
   if (nsecs > 1)
     qsort(seclist,nsecs,sizeof(section *),orgcmp);
 

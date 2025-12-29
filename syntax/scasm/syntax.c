@@ -941,6 +941,224 @@ static void handle_at(char *s)
 }
 
 
+/* SCASM 3.1 .CS directive - C-string with escape sequences */
+static void handle_cs(char *s)
+{
+  dblock *db;
+  unsigned char *data;
+  int len = 0, maxlen = 256;
+  char delim;
+
+  data = mymalloc(maxlen);
+  s = skip(s);
+
+  for (;;) {
+    s = skip(s);
+    if (ISEOL(s))
+      break;
+
+    delim = *s++;
+    if (ISEOL(s)) {
+      syntax_error(30);
+      myfree(data);
+      return;
+    }
+
+    while (*s && *s != delim) {
+      unsigned char c;
+
+      if (*s == '\\' && s[1]) {
+        s++;
+        switch (*s) {
+          case 'a': c = 0x07; break;
+          case 'b': c = 0x08; break;
+          case 'e': c = 0x1B; break;
+          case 'f': c = 0x0C; break;
+          case 'n': c = 0x0A; break;
+          case 'r': c = 0x0D; break;
+          case 't': c = 0x09; break;
+          case 'v': c = 0x0B; break;
+          case '0': c = 0x00; break;
+          case '\\': c = '\\'; break;
+          case '"': c = '"'; break;
+          case '\'': c = '\''; break;
+          case 'x':
+            if (isxdigit((unsigned char)s[1]) && isxdigit((unsigned char)s[2])) {
+              int hi = isdigit((unsigned char)s[1]) ? s[1]-'0' : (toupper((unsigned char)s[1])-'A'+10);
+              int lo = isdigit((unsigned char)s[2]) ? s[2]-'0' : (toupper((unsigned char)s[2])-'A'+10);
+              c = (hi << 4) | lo;
+              s += 2;
+            } else {
+              c = 'x';
+            }
+            break;
+          default:
+            c = *s;
+            break;
+        }
+        s++;
+      } else {
+        c = *s++;
+      }
+
+      if (len >= maxlen) {
+        maxlen *= 2;
+        data = myrealloc(data, maxlen);
+      }
+      data[len++] = c;
+    }
+
+    if (*s == delim)
+      s++;
+
+    s = skip(s);
+    if (*s == ',')
+      s++;
+    else
+      break;
+  }
+
+  if (len > 0) {
+    db = new_dblock();
+    db->size = len;
+    db->data = mymalloc(len);
+    memcpy(db->data, data, len);
+    add_atom(0, new_data_atom(db, 1));
+  }
+  myfree(data);
+  eol(s);
+}
+
+
+/* SCASM 3.1 .CZ directive - C-string zero terminated */
+static void handle_cz(char *s)
+{
+  handle_cs(s);
+  add_atom(0, new_space_atom(number_expr(1), 1, 0));
+}
+
+
+/* SCASM 3.1 .HX directive - Hex nibble storage */
+static void handle_hx(char *s)
+{
+  dblock *db;
+  unsigned char *data;
+  int len = 0, maxlen = 256;
+  int val;
+
+  data = mymalloc(maxlen);
+  s = skip(s);
+
+  while (*s && !ISEOL(s)) {
+    while (*s && (isspace((unsigned char)*s) || *s == '.' || *s == ','))
+      s++;
+
+    if (ISEOL(s) || !isxdigit((unsigned char)*s))
+      break;
+
+    if (isdigit((unsigned char)*s))
+      val = *s - '0';
+    else
+      val = toupper((unsigned char)*s) - 'A' + 10;
+
+    if (len >= maxlen) {
+      maxlen *= 2;
+      data = myrealloc(data, maxlen);
+    }
+    data[len++] = (unsigned char)val;
+    s++;
+  }
+
+  if (len > 0) {
+    db = new_dblock();
+    db->size = len;
+    db->data = mymalloc(len);
+    memcpy(db->data, data, len);
+    add_atom(0, new_data_atom(db, 1));
+  }
+  myfree(data);
+  eol(s);
+}
+
+
+/* SCASM 3.1 .PS directive - Pascal string (length-prefixed) */
+static void handle_ps(char *s)
+{
+  dblock *db;
+  unsigned char *data;
+  int len = 1, maxlen = 256;
+  char delim;
+
+  data = mymalloc(maxlen);
+  s = skip(s);
+
+  for (;;) {
+    s = skip(s);
+    if (ISEOL(s))
+      break;
+
+    delim = *s++;
+    if (ISEOL(s)) {
+      syntax_error(30);
+      myfree(data);
+      return;
+    }
+
+    while (*s && *s != delim) {
+      if (len >= maxlen) {
+        maxlen *= 2;
+        data = myrealloc(data, maxlen);
+      }
+      data[len++] = *s++;
+    }
+
+    if (*s == delim)
+      s++;
+
+    s = skip(s);
+    if (*s == ',')
+      s++;
+    else
+      break;
+  }
+
+  if (len > 1) {
+    int str_len = len - 1;
+    if (str_len > 255)
+      str_len = 255;
+    data[0] = (unsigned char)str_len;
+
+    db = new_dblock();
+    db->size = len;
+    db->data = mymalloc(len);
+    memcpy(db->data, data, len);
+    add_atom(0, new_data_atom(db, 1));
+  }
+  myfree(data);
+  eol(s);
+}
+
+
+/* SCASM .TA directive - Target Address
+   In native SCASM, this sets where object code is written in memory,
+   separate from the origin address used for label calculations.
+   In cross-assembly, this has no effect since we write to files. */
+static void handle_ta(char *s)
+{
+  expr *e;
+  s = skip(s);
+  if (!ISEOL(s)) {
+    e = parse_expr(&s);
+    if (e) {
+      /* Warn user that .TA has no effect in cross-assembly */
+      syntax_error(42);  /* .TA directive ignored in cross-assembly */
+      free_expr(e);
+    }
+  }
+  eol(s);
+}
+
+
 static void handle_op(char *s)
 {
   /* SCASM .OP directive - change CPU type */
@@ -1917,6 +2135,11 @@ struct {
   "ac",handle_ac,         /* .AC - ASCII string with optional numeric prefix */
   "az",handle_az,         /* .AZ - ASCII zero-terminated with flexible delimiters */
   "at",handle_at,         /* .AT - ASCII with high bit set on last char */
+  "cs",handle_cs,         /* .CS - C-string with escape sequences (SCASM 3.1) */
+  "cz",handle_cz,         /* .CZ - C-string zero-terminated (SCASM 3.1) */
+  "hx",handle_hx,         /* .HX - Hex nibble storage (SCASM 3.1) */
+  "ps",handle_ps,         /* .PS - Pascal string (length-prefixed) (SCASM 3.1) */
+  "ta",handle_ta,         /* .TA - Target Address (ignored in cross-assembly) */
   "op",handle_op,         /* .OP - select CPU type (6502/65C02/65816) */
   /* SCASM editor directives */
   "new",handle_noop,      /* NEW - SCASM editor command (clear buffer - ignored) */
