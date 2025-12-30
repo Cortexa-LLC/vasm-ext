@@ -81,6 +81,16 @@ static char inl_lab_name[8];
 static const char *scmasm_last_global_label = NULL;  /* Last global label for .N local labels */
 static int scmasm_private_context = 0;                /* Context counter for :N private labels */
 
+/* SCASM .AC compression state */
+static char ac_table1[16];   /* Table 1: single nibble encoding (nibbles 1-15) */
+static char ac_table2[16];   /* Table 2: two nibble encoding (0, then 1-15) */
+static char ac_table3[16];   /* Table 3: three nibble encoding (0, 0, then 0-15) */
+static int ac_table1_len;    /* Length of table 1 */
+static int ac_table2_len;    /* Length of table 2 */
+static int ac_table3_len;    /* Length of table 3 */
+static int ac_nibble_flag;   /* 0 = even position (high nibble), 1 = odd (low nibble) */
+static unsigned char ac_pending_nibble; /* Saved high nibble when at odd position */
+
 int igntrail;  /* ignore everything after a blank in the operand field */
 
 
@@ -482,13 +492,75 @@ static void handle_d64(char *s)
 
 static void handle_taddr(char *s)
 {
+  /* SCASM .DA directive: process each expression in comma-separated list.
+     Each expression can have its own prefix:
+     #expr = low byte only (1 byte)
+     /expr = high byte only (1 byte)
+     expr  = full address (bytespertaddr bytes, typically 2)
+  */
 #if BITSPERBYTE == 8
   s = skip(s);
-  if (ISEOL(s))
+  if (ISEOL(s)) {
     handle_fixedspc(s,bytespertaddr);
-  else
+    return;
+  }
+
+  for (;;) {
+    char *opstart;
+    operand *op;
+    int size;
+
+    s = skip(s);
+    if (ISEOL(s))
+      break;
+
+    /* Check for # or / prefix on this expression */
+    if (*s == '#') {
+      s++;  /* skip the # */
+      size = 8;  /* low byte only */
+    }
+    else if (*s == '/') {
+      /* Keep / for expression parser (high byte operator) */
+      size = 8;  /* high byte only */
+    }
+    else {
+      size = bytespertaddr * BITSPERBYTE;  /* full address */
+    }
+
+    opstart = s;
+    op = new_operand();
+    s = skip_operand(0, s);
+    if (parse_operand(opstart, s - opstart, op, DATA_OPERAND(size))) {
+      atom *a = new_datadef_atom(OPSZ_BITS(size), op);
+      a->align = 1;
+      add_atom(0, a);
+    }
+    else {
+      syntax_error(8);  /* invalid data operand */
+      return;
+    }
+
+    s = skip(s);
+    if (*s == ',') {
+      s++;
+    }
+    else if (*s == commentchar || ISEOL(s)) {
+      break;
+    }
+    else {
+      /* SCASM igntrail: treat trailing content as comment */
+      if (!igntrail) {
+        syntax_error(9);  /* , expected */
+        return;
+      }
+      break;
+    }
+  }
+
+  eol(s);
+#else
+  handle_data(s,bytespertaddr*BITSPERBYTE);
 #endif
-    handle_data(s,bytespertaddr*BITSPERBYTE);
 }
 
 
@@ -588,10 +660,12 @@ static void handle_align(char *s)
 }
 
 
-/* SCASM .PG directive - align to next 256-byte page boundary */
+/* SCASM .PG directive - page eject for listing output only.
+   In the original S-C Assembler, .PG outputs a form feed ($0C) to the
+   listing and increments the page counter. It does NOT affect code
+   placement or memory alignment. This is a no-op for code generation. */
 static void handle_pg(char *s)
 {
-  do_alignment(256,number_expr(0));
   eol(s);
 }
 
@@ -755,26 +829,55 @@ static void handle_string(char *s)
 static void handle_as(char *s)
 {
   dblock *db;
+  char *opstart;
 
   for (;;) {
-    int no_highbit = 0;
+    int force_highbit = 0;
+    opstart = s;
     s = skip(s);
     if (ISEOL(s))
       break;
 
-    /* SCASM: Check for optional '-' flag (suppress high-bit setting) */
+    /* SCASM: Check for optional '-' flag (FORCE high-bit setting on all chars) */
     if (*s == '-') {
-      no_highbit = 1;
+      force_highbit = 1;
       s++;
+      opstart = s;  /* update opstart past the flag */
     }
 
     /* Parse string with any non-whitespace delimiter */
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
       db = parse_string(&s,delim,8);
+
+      /* parse_string returns NULL for single-character strings.
+         Handle this case explicitly. */
+      if (!db) {
+        char *p = opstart;
+        p = skip(p);
+        if (*p == delim) {
+          p++;  /* skip opening delimiter */
+          if (*p && !ISEOL(p) && p[1] == delim) {
+            /* Single character between delimiters */
+            db = new_dblock();
+            db->size = 1;
+            db->data = mymalloc(1);
+            db->data[0] = *p;
+            s = p + 2;  /* skip char and closing delimiter */
+          }
+        }
+      }
+
       if (db) {
-        if (!no_highbit)
+        if (force_highbit) {
+          /* Force high bit on all characters regardless of delimiter */
+          size_t i;
+          for (i = 0; i < db->size; i++) {
+            db->data[i] |= 0x80;
+          }
+        } else {
           apply_delimiter_highbit(db, delim);
+        }
         add_atom(0,new_data_atom(db,1));
       }
     }
@@ -798,59 +901,209 @@ static void handle_as(char *s)
 }
 
 
-/* SCASM .AC directive - ASCII string with optional numeric prefix */
+/* SCASM .AC directive - ASCII Compression
+
+   This implements SCASM's nibble-based text compression:
+   - .AC 0              Initialize compression state (reset nibble position)
+   - .AC 1"chars"       Define table 1 (single nibble encoding, nibbles 1-15)
+   - .AC 2"chars"       Define table 2 (two nibble encoding: 0, then 1-15)
+   - .AC 3"chars"       Define table 3 (three nibble encoding: 0, 0, then 0-15)
+   - .AC /message%/     Compress message using defined tables
+
+   Compression scheme:
+   - Characters in table 1 at index i emit nibble (i+1)
+   - Characters in table 2 at index i emit nibbles 0, (i+1)
+   - Characters in table 3 at index i emit nibbles 0, 0, i
+   - % (end marker) must be last char in table 1, emits nibble 15
+   - Nibbles are packed two per byte (high nibble first)
+   - At end of message, any pending nibble is flushed with 0 padding
+*/
 static void handle_ac(char *s)
 {
   dblock *db;
+  unsigned char *outbuf;
+  int outlen = 0, outmax = 256;
+  int table_num = -1;  /* -1 = compress mode, 0-3 = table definition/init */
+  char delim;
+  size_t i;
 
-  for (;;) {
-    int no_highbit = 0;
+  s = skip(s);
+  if (ISEOL(s))
+    return;
+
+  /* Check for numeric prefix (table definition or init) */
+  if (isdigit((unsigned char)*s)) {
+    table_num = *s - '0';
+    s++;
     s = skip(s);
-    if (ISEOL(s))
-      break;
 
-    /* SCASM: Check for optional numeric prefix (e.g., "0" in ".AC 0") */
-    /* If it's a digit, skip past the number without evaluating as expression */
-    if (isdigit((unsigned char)*s)) {
-      while (isdigit((unsigned char)*s))
-        s++;
-      s = skip(s);
-      /* If we hit a delimiter after the number, we're at the string */
-      /* If we hit EOL, just the number was present (e.g., ".AC 0") */
-    }
-
-    /* SCASM: Check for optional '-' flag (suppress high-bit setting) */
-    if (*s == '-') {
-      no_highbit = 1;
-      s++;
-    }
-
-    /* Parse string with any non-whitespace delimiter */
-    if (*s && !isspace((unsigned char)*s)) {
-      char delim = *s;
-      db = parse_string(&s,delim,8);
-      if (db) {
-        if (!no_highbit)
-          apply_delimiter_highbit(db, delim);
-        add_atom(0,new_data_atom(db,1));
-      }
-    }
-    else if (!ISEOL(s)) {
-      syntax_error(30);  /* missing closing delimiter for string */
+    /* .AC 0 - Initialize compression state
+       Note: SCASM igntrail mode allows inline comments after operands */
+    if (table_num == 0) {
+      ac_nibble_flag = 0;
+      ac_pending_nibble = 0;
+      eol(s);
       return;
     }
 
-    s = skip(s);
-    if (*s == ',')
-      s = skip(s+1);
-    else if (!ISEOL(s)) {
-      if (!igntrail) {
-        syntax_error(9);  /* , expected */
-        return;
+    /* .AC 1/2/3"..." - Define compression table */
+    if (table_num >= 1 && table_num <= 3 && *s && !isspace((unsigned char)*s)) {
+      delim = *s;
+      db = parse_string(&s, delim, 8);
+      if (db && db->size > 0) {
+        int maxlen = (table_num == 3) ? 16 : 15;  /* Table 3 can have 16 entries */
+        int copylen = (db->size > maxlen) ? maxlen : db->size;
+
+        switch (table_num) {
+          case 1:
+            memcpy(ac_table1, db->data, copylen);
+            ac_table1_len = copylen;
+            break;
+          case 2:
+            memcpy(ac_table2, db->data, copylen);
+            ac_table2_len = copylen;
+            break;
+          case 3:
+            memcpy(ac_table3, db->data, copylen);
+            ac_table3_len = copylen;
+            break;
+        }
       }
-      break;  /* Exit loop when igntrail is true and trailing content present */
+      eol(s);
+      return;
     }
   }
+
+  /* Compression mode: .AC /message/ or .AC "message" */
+  if (!*s || isspace((unsigned char)*s)) {
+    if (!ISEOL(s))
+      syntax_error(30);  /* missing closing delimiter for string */
+    return;
+  }
+
+  delim = *s;
+  db = parse_string(&s, delim, 8);
+
+  /* parse_string returns NULL for single-character strings.
+     For .AC compression, we need to handle single characters too. */
+  if (!db) {
+    char *p = s + 1;  /* point past opening delimiter */
+    /* Check for single character followed by closing delimiter */
+    if (*p && p[1] == delim) {
+      db = new_dblock();
+      db->size = 1;
+      db->data = mymalloc(1);
+      db->data[0] = *p;
+      s = p + 2;  /* skip char and closing delimiter */
+    } else {
+      eol(s);
+      return;
+    }
+  }
+  if (db->size == 0) {
+    eol(s);
+    return;
+  }
+
+  /* Allocate output buffer for compressed data */
+  outbuf = mymalloc(outmax);
+  outlen = 0;
+
+  /* Helper macro to emit a nibble */
+  #define EMIT_NIBBLE(nib) do { \
+    if (ac_nibble_flag == 0) { \
+      ac_pending_nibble = (nib) & 0x0F; \
+      ac_nibble_flag = 1; \
+    } else { \
+      if (outlen >= outmax) { \
+        outmax *= 2; \
+        outbuf = myrealloc(outbuf, outmax); \
+      } \
+      outbuf[outlen++] = (ac_pending_nibble << 4) | ((nib) & 0x0F); \
+      ac_nibble_flag = 0; \
+    } \
+  } while(0)
+
+  /* Process each character in the input string */
+  for (i = 0; i < db->size; i++) {
+    unsigned char ch = db->data[i];
+    int found = 0;
+    int j;
+
+    /* Search table 1 (single nibble: index+1) */
+    for (j = 0; j < ac_table1_len && !found; j++) {
+      if ((unsigned char)ac_table1[j] == ch) {
+        EMIT_NIBBLE(j + 1);
+        found = 1;
+      }
+    }
+
+    /* Search table 2 (two nibbles: 0, index+1) */
+    for (j = 0; j < ac_table2_len && !found; j++) {
+      if ((unsigned char)ac_table2[j] == ch) {
+        EMIT_NIBBLE(0);
+        EMIT_NIBBLE(j + 1);
+        found = 1;
+      }
+    }
+
+    /* Search table 3 (three nibbles: 0, 0, index+1)
+       The runtime THIRD.TABLE has a placeholder at index 0 (typically '.'),
+       so actual characters start at index 1. This matches the structure
+       of tables 1 and 2 where index 0 is reserved. */
+    for (j = 0; j < ac_table3_len && !found; j++) {
+      if ((unsigned char)ac_table3[j] == ch) {
+        EMIT_NIBBLE(0);
+        EMIT_NIBBLE(0);
+        EMIT_NIBBLE(j + 1);  /* Use j+1 to match THIRD.TABLE structure */
+        found = 1;
+      }
+    }
+
+    /* If character not found in tables and it's a digit, use as blank count.
+       This allows digits in tables to be encoded as characters (main assembler),
+       while digits NOT in tables become space counts (SCI module).
+       Digit N means output N spaces (0 = 10 spaces). */
+    if (!found && ch >= '0' && ch <= '9') {
+      int blank_count = (ch == '0') ? 10 : (ch - '0');
+      /* Find space in table 1 */
+      int space_idx = -1;
+      for (j = 0; j < ac_table1_len; j++) {
+        if (ac_table1[j] == ' ') {
+          space_idx = j + 1;
+          break;
+        }
+      }
+      if (space_idx > 0) {
+        for (j = 0; j < blank_count; j++) {
+          EMIT_NIBBLE(space_idx);
+        }
+        found = 1;
+      }
+    }
+
+    if (!found) {
+      /* Character not in any table - output error and skip */
+      general_error(38, ch);  /* illegal reloc */
+    }
+  }
+
+  /* Do NOT flush pending nibble here - nibble state persists across
+     .AC directives. Messages are packed continuously, sharing bytes
+     at boundaries. The decompressor scans nibbles, not bytes. */
+
+  #undef EMIT_NIBBLE
+
+  /* Output the compressed data (complete bytes only) */
+  if (outlen > 0) {
+    dblock *out_db = new_dblock();
+    out_db->size = outlen;
+    out_db->data = mymalloc(outlen);
+    memcpy(out_db->data, outbuf, outlen);
+    add_atom(0, new_data_atom(out_db, 1));
+  }
+
+  myfree(outbuf);
   eol(s);
 }
 
@@ -859,8 +1112,10 @@ static void handle_ac(char *s)
 static void handle_az(char *s)
 {
   dblock *db;
+  char *opstart;
 
   for (;;) {
+    opstart = s;
     s = skip(s);
     if (ISEOL(s))
       break;
@@ -869,6 +1124,25 @@ static void handle_az(char *s)
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
       db = parse_string(&s,delim,8);
+
+      /* parse_string returns NULL for single-character strings.
+         Handle this case explicitly. */
+      if (!db) {
+        char *p = opstart;
+        p = skip(p);
+        if (*p == delim) {
+          p++;  /* skip opening delimiter */
+          if (*p && !ISEOL(p) && p[1] == delim) {
+            /* Single character between delimiters */
+            db = new_dblock();
+            db->size = 1;
+            db->data = mymalloc(1);
+            db->data[0] = *p;
+            s = p + 2;  /* skip char and closing delimiter */
+          }
+        }
+      }
+
       if (db) {
         apply_delimiter_highbit(db, delim);
         add_atom(0,new_data_atom(db,1));
@@ -896,7 +1170,11 @@ static void handle_az(char *s)
 }
 
 
-/* SCASM .AT directive - ASCII with high bit inverted on last character */
+/* SCASM .AT directive - ASCII with high bit inverted on last character
+   High bit handling depends on delimiter:
+   - Delimiter < $27 (like '-'): Set high bit on all chars, then toggle last
+   - Delimiter >= $27 (like '/', '"'): No high bit on chars, then toggle last
+   This matches S-C Assembler behavior for command tables vs display strings. */
 static void handle_at(char *s)
 {
   char *opstart;
@@ -913,10 +1191,29 @@ static void handle_at(char *s)
     if (*s && !isspace((unsigned char)*s)) {
       char delim = *s;
       db = parse_string(&s,delim,8);
+
+      /* parse_string returns NULL for single-character strings.
+         Handle this case explicitly for .AT directive. */
+      if (!db) {
+        char *p = opstart;
+        p = skip(p);
+        if (*p == delim) {
+          p++;  /* skip opening delimiter */
+          if (*p && !ISEOL(p) && p[1] == delim) {
+            /* Single character between delimiters */
+            db = new_dblock();
+            db->size = 1;
+            db->data = mymalloc(1);
+            db->data[0] = *p;
+            s = p + 2;  /* skip char and closing delimiter */
+          }
+        }
+      }
+
       if (db && db->size > 0) {
-        /* Apply delimiter rule first */
+        /* Apply delimiter rule first (sets high bit if delim < $27) */
         apply_delimiter_highbit(db, delim);
-        /* Then invert high bit on last character */
+        /* Then toggle high bit on last character for end-of-string marker */
         db->data[db->size - 1] ^= 0x80;
         add_atom(0,new_data_atom(db,1));
       }
@@ -2941,6 +3238,27 @@ char *parse_macro_arg(struct macro *m,char *s,
                       struct namelen *param,struct namelen *arg)
 {
   arg->len = 0;  /* cannot select specific named arguments */
+
+  /* SCASM: If argument starts with a quote, strip the quotes.
+     This allows passing string content to macros like:
+       >QT LABEL,"MESSAGE TEXT%"
+     where ]2 should be MESSAGE TEXT% without quotes. */
+  if (*s == '"' || *s == '\'') {
+    char quote = *s;
+    s++;  /* skip opening quote */
+    param->name = s;
+    /* Find closing quote */
+    while (*s && *s != quote) {
+      if (*s == '\\' && *(s+1))
+        s++;  /* skip escaped character */
+      s++;
+    }
+    param->len = s - param->name;
+    if (*s == quote)
+      s++;  /* skip closing quote */
+    return s;
+  }
+
   param->name = s;
   s = skip_operand(0,s);
   param->len = s - param->name;

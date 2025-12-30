@@ -17,6 +17,12 @@ int isidchar(char);
 /* result of a boolean operation */
 #define BOOLEAN(x) -(x)
 
+/* SCASM character constant rule:
+   Delimiter < apostrophe (0x27) → set high bit on character
+   This applies to expression character constants like #"A" or #'A' */
+#define CHAR_CONST_TRANSFORM(c, delim) \
+  ((delim) < '\'' ? ((c) | 0x80) : (c))
+
 /* we have a special skip() function for expressions, called exp_skip() */
 char *exp_skip(char *);
 #define EXPSKIP() s=exp_skip(s)

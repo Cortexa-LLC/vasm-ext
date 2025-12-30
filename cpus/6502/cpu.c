@@ -148,7 +148,15 @@ int parse_operand(char *p,int len,operand *op,int required)
         if (*p == '#')
           p = skip(++p);
 #endif
-        pfx = 1;  /* immediate/data allows different selector prefixes */
+      case ABS:
+      case ABSX:
+      case ABSY:
+      case ABSZ:
+      case LABS:
+      case LABSX:
+        if (indir)
+          return PO_NOMATCH;  /* absolute modes reject indirect operands */
+        pfx = 1;  /* immediate/data/absolute allows byte-selector prefixes */
         break;
       case INDIR:
       case INDIRX:
