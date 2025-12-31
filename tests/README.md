@@ -7,7 +7,7 @@ This directory contains test suites for various vasm syntax modules and features
 ```
 tests/
 ├── README.md           # This file
-├── scasm/              # SCASM syntax module tests
+├── scmasm/             # SCMASM syntax module tests
 │   ├── README.md       # SCASM test documentation
 │   └── test_*.s        # SCASM test files (features + original suite)
 ├── merlin/             # Merlin syntax module tests
@@ -19,7 +19,7 @@ tests/
 
 ## Test Suites
 
-### SCASM Syntax Module Tests (`scasm/`)
+### SCMASM Syntax Module Tests (`scmasm/`)
 
 Tests for the S-C Macro Assembler (SCASM) 3.0/3.1 syntax module. These tests verify SCASM-specific features:
 
@@ -32,11 +32,11 @@ Tests for the S-C Macro Assembler (SCASM) 3.0/3.1 syntax module. These tests ver
 
 **Building and running:**
 ```bash
-make CPU=6502 SYNTAX=scasm
-./vasm6502_scasm -Fbin -o tests/scasm/test.bin tests/scasm/test.s
+make CPU=6502 SYNTAX=scmasm
+./vasm6502_scmasm -Fbin -o tests/scmasm/test.bin tests/scmasm/test.s
 ```
 
-**Documentation:** See `scasm/README.md` for detailed test descriptions.
+**Documentation:** See `scmasm/README.md` for detailed test descriptions.
 
 ### Merlin Syntax Module Tests (`merlin/`)
 
@@ -84,7 +84,7 @@ The Makefile includes convenient test targets:
 
 ```bash
 # Test SCMASM syntax module
-make test-scasm
+make test-scmasm
 
 # Test oldstyle syntax module
 make test-oldstyle
@@ -93,10 +93,10 @@ make test-oldstyle
 make test-all
 
 # Test currently built CPU/SYNTAX combination
-make CPU=6502 SYNTAX=scasm test
+make CPU=6502 SYNTAX=scmasm test
 
 # Alternative: use 'check' alias
-make CPU=6502 SYNTAX=scasm check
+make CPU=6502 SYNTAX=scmasm check
 ```
 
 The test targets automatically:
@@ -109,10 +109,10 @@ The test targets automatically:
 
 #### SCMASM Tests
 ```bash
-make CPU=6502 SYNTAX=scasm
-for test in tests/scasm/test_*.s; do
+make CPU=6502 SYNTAX=scmasm
+for test in tests/scmasm/test_*.s; do
     echo "Testing: $test"
-    ./vasm6502_scasm -Fbin -o "${test%.s}.bin" "$test" || echo "FAILED: $test"
+    ./vasm6502_scmasm -Fbin -o "${test%.s}.bin" "$test" || echo "FAILED: $test"
 done
 ```
 
@@ -139,7 +139,7 @@ Binary outputs are generated as `test_*.bin` and are excluded from version contr
 When adding new tests:
 
 1. Place test files in the appropriate subdirectory:
-   - `scasm/` for SCMASM-specific tests
+   - `scmasm/` for SCMASM-specific tests
    - `oldstyle/` for general or oldstyle syntax tests
 
 2. Use descriptive test names (e.g., `test_macro_params.s`, `test_local_labels.s`)

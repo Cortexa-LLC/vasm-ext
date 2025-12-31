@@ -10,15 +10,15 @@ Cross-platform assembler syntax module providing complete support for the S-C Ma
 
 ```bash
 cd /path/to/vasm
-make CPU=6502 SYNTAX=scasm
+make CPU=6502 SYNTAX=scmasm
 ```
 
-This creates the `vasm6502_scasm` executable.
+This creates the `vasm6502_scmasm` executable.
 
 ### Basic Usage
 
 ```bash
-./vasm6502_scasm -Fbin -o output.bin source.asm
+./vasm6502_scmasm -Fbin -o output.bin source.asm
 ```
 
 ### Example Code
@@ -175,10 +175,10 @@ VALUE   .EQ   $05
 
 ```bash
 # Run test suite
-make CPU=6502 SYNTAX=scasm test
+make CPU=6502 SYNTAX=scmasm test
 
 # Individual test
-./vasm6502_scasm -Fbin -o /tmp/test.bin tests/scasm/test_basic.asm
+./vasm6502_scmasm -Fbin -o /tmp/test.bin tests/scmasm/test_basic.asm
 ```
 
 ## Boolean Operators

@@ -9,7 +9,7 @@ Usage:
     python3 tests/run_tests.py <syntax> [assembler_path]
 
 Examples:
-    python3 tests/run_tests.py scasm
+    python3 tests/run_tests.py scmasm
     python3 tests/run_tests.py merlin ./vasm6502_merlin
 """
 
@@ -24,10 +24,10 @@ from pathlib import Path
 
 # Test file patterns for each syntax module
 SYNTAX_CONFIG = {
-    'scasm': {
-        'test_dir': 'tests/scasm',
+    'scmasm': {
+        'test_dir': 'tests/scmasm',
         'pattern': 'test_*.s',
-        'assembler': 'vasm6502_scasm',
+        'assembler': 'vasm6502_scmasm',
     },
     'merlin': {
         'test_dir': 'tests/merlin',
@@ -168,15 +168,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s scasm              Run SCASM tests
+  %(prog)s scmasm             Run SCMASM tests
   %(prog)s merlin             Run Merlin tests
-  %(prog)s scasm -v           Run SCASM tests with verbose output
+  %(prog)s scmasm -v          Run SCMASM tests with verbose output
   %(prog)s merlin -a ./my_asm Run Merlin tests with custom assembler
   %(prog)s all                Run all syntax module tests
 """
     )
     parser.add_argument('syntax',
-                        help='Syntax module to test (scasm, merlin, oldstyle, or "all")')
+                        help='Syntax module to test (scmasm, merlin, oldstyle, or "all")')
     parser.add_argument('-a', '--assembler',
                         help='Path to assembler executable')
     parser.add_argument('-v', '--verbose', action='store_true',

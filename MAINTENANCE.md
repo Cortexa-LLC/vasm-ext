@@ -130,7 +130,7 @@ The integration script will pause if conflicts are detected. Resolve them follow
 
 ```bash
 # Keep our additions (never in upstream):
-#   - syntax/scasm/
+#   - syntax/scmasm/
 #   - syntax/merlin/
 #   - CLAUDE.md
 #   - MAINTENANCE.md (this file)
@@ -168,9 +168,9 @@ git rebase upstream-tracking
 These files are always kept, never conflict:
 
 ```
-syntax/scasm/           # SCASM syntax module
+syntax/scmasm/           # SCASM syntax module
 syntax/merlin/          # Merlin syntax module
-tests/scasm/            # SCASM tests
+tests/scmasm/            # SCASM tests
 tests/merlin/           # Merlin tests
 CLAUDE.md              # Claude Code guidance
 MAINTENANCE.md         # This file
@@ -277,10 +277,10 @@ Create `test-integration.sh`:
 set -e
 
 echo "Testing SCASM module..."
-make CPU=6502 SYNTAX=scasm clean
-make CPU=6502 SYNTAX=scasm
-./vasm6502_scasm -Fbin -o /tmp/test1.bin tests/scasm/test_basic.asm
-./vasm6502_scasm -Fbin -o /tmp/test2.bin tests/scasm/test_delimiters.asm
+make CPU=6502 SYNTAX=scmasm clean
+make CPU=6502 SYNTAX=scmasm
+./vasm6502_scmasm -Fbin -o /tmp/test1.bin tests/scmasm/test_basic.asm
+./vasm6502_scmasm -Fbin -o /tmp/test2.bin tests/scmasm/test_delimiters.asm
 
 echo "Testing Merlin module..."
 make CPU=6502 SYNTAX=merlin clean
@@ -360,7 +360,7 @@ For feature requests (e.g., better plugin hooks):
 
 ```bash
 # Find all branches that touched our modules
-git log --all --oneline -- syntax/scasm syntax/merlin
+git log --all --oneline -- syntax/scmasm syntax/merlin
 
 # Recover from reflog
 git reflog
@@ -384,7 +384,7 @@ git reset --hard HEAD@{1}
 # Nuclear option: reapply our changes cleanly
 git checkout upstream-tracking
 git checkout -b fresh-integration
-git checkout main -- syntax/scasm syntax/merlin tests/scasm tests/merlin
+git checkout main -- syntax/scmasm syntax/merlin tests/scmasm tests/merlin
 git checkout main -- CLAUDE.md MAINTENANCE.md
 git commit -m "Reapply extensions to new baseline"
 ```
@@ -428,12 +428,12 @@ git commit -m "Reapply extensions to new baseline"
 │   │   ├── origin → git@github.com:Cortexa-LLC/vasm-ext.git
 │   │   └── upstream-repo → ../vasm (local)
 │   ├── syntax/
-│   │   ├── scasm/        # Our addition
+│   │   ├── scmasm/       # Our addition
 │   │   ├── merlin/       # Our addition
 │   │   ├── oldstyle/     # Upstream
 │   │   └── ...
 │   ├── tests/
-│   │   ├── scasm/        # Our addition
+│   │   ├── scmasm/       # Our addition
 │   │   ├── merlin/       # Our addition
 │   │   └── ...
 │   ├── CLAUDE.md         # Our addition
@@ -488,7 +488,7 @@ git diff baseline-v2.0e..main --name-only
 git diff upstream-tracking..main
 
 # Test everything
-make CPU=6502 SYNTAX=scasm && make CPU=6502 SYNTAX=merlin
+make CPU=6502 SYNTAX=scmasm && make CPU=6502 SYNTAX=merlin
 
 # Complete integration
 git checkout main

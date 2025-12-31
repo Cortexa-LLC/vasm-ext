@@ -1,7 +1,7 @@
 #!/bin/bash
 # SCASM Syntax Module Test Runner
 
-VASM="../../vasm6502_scasm"
+VASM="../../vasm6502_scmasm"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
@@ -21,7 +21,7 @@ if [ ! -f "$VASM" ]; then
     echo -e "${RED}Error: $VASM not found${NC}"
     echo "Please build the assembler first:"
     echo "  cd ../.."
-    echo "  make CPU=6502 SYNTAX=scasm"
+    echo "  make CPU=6502 SYNTAX=scmasm"
     exit 1
 fi
 

@@ -1,3 +1,6 @@
+# Claude
+.claude/
+
 # Build artifacts
 obj/
 *.o
@@ -17,6 +20,15 @@ vasmtr3200_*
 vasmvidcore_*
 vasmx86_*
 vobjdump
+
+# Test outputs
+tests/**/*.bin
+tests/**/*.lst
+tests/**/*.o
+
+# Backup files
+*.backup
+*~
 
 # Temporary directories
 vasm-upstream-temp/

@@ -91,7 +91,7 @@ echo "  - Makefile (if modified)"
 echo "  - Other files we changed"
 echo ""
 echo "Our additions will be preserved:"
-echo "  - syntax/scasm/"
+echo "  - syntax/scmasm/"
 echo "  - syntax/merlin/"
 echo "  - CLAUDE.md"
 echo "  - MAINTENANCE.md"
@@ -121,7 +121,7 @@ echo ""
 echo "Step 6: Testing integration..."
 echo ""
 echo "Build and test both modules:"
-echo "  make CPU=6502 SYNTAX=scasm"
+echo "  make CPU=6502 SYNTAX=scmasm"
 echo "  make CPU=6502 SYNTAX=merlin"
 echo ""
 read -p "Run tests now? (y/N) " -n 1 -r
@@ -130,8 +130,8 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "Building SCASM module..."
-    make CPU=6502 SYNTAX=scasm clean
-    make CPU=6502 SYNTAX=scasm
+    make CPU=6502 SYNTAX=scmasm clean
+    make CPU=6502 SYNTAX=scmasm
 
     echo ""
     echo "Building Merlin module..."
