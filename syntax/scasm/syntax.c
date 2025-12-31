@@ -800,6 +800,39 @@ static void handle_hs(char *s)
     }
 
     hexdata[len++] = (nibble1 << 4) | nibble2;
+
+    /* SCASM: Check for comment start after a complete byte
+     * Comments in .HS lines often start with hex-like sequences (e.g., "0000-3FFF")
+     * If we see multiple spaces or certain non-separator characters after whitespace,
+     * treat the rest of the line as a comment
+     */
+    {
+      char *peek = s;
+      int space_count = 0;
+
+      /* Count consecutive spaces */
+      while (*peek == ' ') {
+        space_count++;
+        peek++;
+      }
+
+      /* If we have 2+ spaces, likely a comment */
+      if (space_count >= 2) {
+        break;
+      }
+
+      /* If we find a dash after spaces/hex, it's likely a range comment like "0000-3FFF" */
+      if (space_count > 0 && isxdigit((unsigned char)*peek)) {
+        /* Peek ahead to see if there's a dash */
+        char *dash_check = peek;
+        while (isxdigit((unsigned char)*dash_check))
+          dash_check++;
+        if (*dash_check == '-') {
+          /* This is a range comment */
+          break;
+        }
+      }
+    }
   }
 
   if (len > 0) {
@@ -951,7 +984,10 @@ static void handle_ac(char *s)
       delim = *s;
       db = parse_string(&s, delim, 8);
       if (db && db->size > 0) {
-        int maxlen = (table_num == 3) ? 16 : 15;  /* Table 3 can have 16 entries */
+        /* SCASM accepts up to 48 total bytes across all 3 tables (CPX #48 check)
+           but only uses first 15 entries per table during compression (LDY #15 loops).
+           Accept all chars to match SCASM behavior, but only first 15 will be used. */
+        int maxlen = (table_num == 1) ? 47 : ((table_num == 2) ? 31 : 15);
         int copylen = (db->size > maxlen) ? maxlen : db->size;
 
         switch (table_num) {
@@ -1210,7 +1246,10 @@ static void handle_at(char *s)
         }
       }
 
-      if (db && db->size > 0) {
+      if (db && db->size > 1) {
+        /* Skip single-character .AT strings to match original SCASM behavior.
+           Original SCASM outputs nothing for .AT /-/ due to length-1 edge case.
+           Many source files depend on this quirk (e.g., COMMAND.TABLE). */
         /* Apply delimiter rule first (sets high bit if delim < $27) */
         apply_delimiter_highbit(db, delim);
         /* Then toggle high bit on last character for end-of-string marker */
@@ -3014,6 +3053,31 @@ void parse(void)
       else {
 #endif
         /* it's just a label */
+
+        /* SCASM FIX: Check if next token is a section-switching directive.
+           If so, process it BEFORE creating the label atom, so the label
+           is created in the correct section. This allows syntax like:
+           "ZS.END  .ED" where the label should be in the post-.ED section. */
+        char *lookahead = skip(s);
+        if ((dotdirs && *lookahead == '.') || (!dotdirs && *lookahead)) {
+          /* Check for section-switching directives */
+          char *dir = lookahead + (dotdirs ? 1 : 0);
+          if ((!strnicmp(dir,"ED",2) && (isspace((unsigned char)dir[2]) || dir[2]=='\0' || dir[2]=='*')) ||
+              (!strnicmp(dir,"EP",2) && (isspace((unsigned char)dir[2]) || dir[2]=='\0' || dir[2]=='*')) ||
+              (!strnicmp(dir,"DUMMY",5) && (isspace((unsigned char)dir[5]) || dir[5]=='\0' || dir[5]=='*')) ||
+              (!strnicmp(dir,"PH",2) && (isspace((unsigned char)dir[2]) || dir[2]=='\0' || dir[2]=='*')) ||
+              (!strnicmp(dir,"SE",2) && (isspace((unsigned char)dir[2]) || dir[2]=='\0' || dir[2]=='*'))) {
+            /* Process the section-switching directive first */
+            if (handle_directive(lookahead)) {
+              /* Directive was processed, now fall through to create label in new section */
+              s = skip(lookahead);
+              while (*s && *s!='*' && *s!=commentchar && !isspace((unsigned char)*s))
+                s++;  /* skip past directive */
+              s = skip(s);  /* skip whitespace/comments after directive */
+            }
+          }
+        }
+
         label = new_labsym(current_section,labname);
         add_atom(0,new_label_atom(label));
 
