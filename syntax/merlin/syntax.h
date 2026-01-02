@@ -25,6 +25,12 @@ char *exp_skip(char *);
 /* Merlin uses period (.) as bit-OR operator (e.g., RdGrp.Inc = RdGrp | Inc) */
 #define DOT_AS_BITOR
 
+/* Merlin character constant high-bit rule:
+   Delimiter < 0x27 (apostrophe) → high bit SET
+   Delimiter >= 0x27 → high bit CLEAR
+   Example: LDA #"A" produces $C1, LDA #'A' produces $41 */
+#define CHAR_CONST_TRANSFORM(c, delim) ((delim) < 0x27 ? ((c) | 0x80) : (c))
+
 /* Merlin uses non-alphanumeric delimiters: <<< (end macro), --^ (end loop) */
 #define SYNTAX_MERLIN_DELIMITERS
 

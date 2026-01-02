@@ -152,7 +152,126 @@ texi2dvi --pdf vasm.texi  # Creates vasm.pdf
 texi2html -split=chapter -nosec_nav -frames vasm.texi  # Creates HTML docs
 ```
 
+## Merlin Syntax Module
+
+The Merlin syntax module (`syntax/merlin/`) provides compatibility with Apple II Merlin assembler syntax, including support for 65816 extended instructions.
+
+### 65816 16-bit Immediate Mode
+
+The Merlin syntax module properly tracks 65816 register sizes for 16-bit immediate mode instructions.
+
+**Directives that set register sizes:**
+- `MX %00` - 16-bit A and X/Y
+- `MX %01` - 16-bit A, 8-bit X/Y
+- `MX %10` - 8-bit A, 16-bit X/Y
+- `MX %11` - 8-bit A and X/Y (default)
+- `LONGA ON/OFF` - Set accumulator to 16-bit/8-bit
+- `LONGI ON/OFF` - Set index registers to 16-bit/8-bit
+
+**Automatic REP/SEP tracking:**
+
+The assembler automatically tracks `REP` and `SEP` instructions to update register sizes:
+```asm
+ xc
+ xc              ; Enable 65816 mode
+ rep $30         ; Sets 16-bit A and X/Y (tracked automatically)
+ ldx #$1234      ; Assembled as 3 bytes: A2 34 12
+ sep $20         ; Sets 8-bit A, X/Y unchanged (tracked)
+ lda #$56        ; Assembled as 2 bytes: A9 56
+ xc off          ; Resets to 8-bit mode
+```
+
+**XC OFF behavior:**
+
+The `xc off` directive resets both the CPU type to 6502 AND the register sizes back to 8-bit. This ensures subsequent code is assembled correctly for 6502/65C02.
+
+### Binary Size Difference vs. snap Assembler
+
+**Important:** vasm produces larger binaries than Adam Green's `snap` assembler for code containing 65816 instructions. This is by design and is the correct behavior.
+
+| Assembler | 65816 Code Handling | IIgs Compatible |
+|-----------|---------------------|-----------------|
+| **vasm**  | Outputs actual 65816 machine code | ✓ Yes |
+| **snap**  | Outputs RTS ($60) placeholders | ✗ No |
+
+**Example - getparam function:**
+```asm
+getparam
+ lda IIGS
+ beq ]rts        ; Skip on non-IIgs
+ clc
+ xce             ; Enter native mode
+ rep $30         ; 16-bit registers
+ ldx #$0C03      ; IIgs toolbox call
+ hex 22,00,00,E1 ; JSL $E10000
+ ...
+```
+
+**snap output (~16 bytes):**
+```
+60 60 60 60 60 60 60 60 22 00 00 e1 60 60 60 60
+   ^^^^^^^^^^^^^^^^^^^ RTS placeholders ^^^^^^^^^^^
+```
+
+**vasm output (~18 bytes):**
+```
+18 fb c2 30 48 5a a2 03 0c 22 00 00 e1 68 38 fb a8 60
+^^ actual 65816 instructions ^^
+```
+
+**Why this matters:**
+- On Apple IIe/IIc: The 65816 code is skipped via `beq ]rts` - both work
+- On Apple IIgs: snap's RTS placeholders immediately return without executing the IIgs-specific code; vasm's code executes correctly
+
+**Disk layout implications:**
+
+When building disk images (e.g., Prince of Persia), the binary sizes will differ from snap-built versions. Disk layout files must be adjusted to accommodate the correct (larger) binary sizes. This is a one-time adjustment and ensures proper IIgs compatibility.
+
 ## Bug Fixes Applied
+
+### Fixed: 65816 16-bit Immediate Mode (Merlin syntax)
+
+**Bug**: The Merlin syntax module was not properly handling 65816 16-bit immediate mode. After `rep $30`, instructions like `ldx #$0C03` were assembled as 2 bytes instead of 3 bytes.
+
+**Root Cause**:
+1. MX/LONGA/LONGI directives used values 1/2 instead of 8/16 for register sizes
+2. The CPU module's `asize`/`xsize` variables weren't updated when directives were processed
+3. REP/SEP instructions weren't tracked to update register sizes
+4. `xc off` didn't reset register sizes back to 8-bit
+
+**Fix Applied**:
+
+1. Added `set_65816_sizes()` and `get_65816_sizes()` to CPU module (`cpus/6502/cpu.c`):
+```c
+void set_65816_sizes(int a_size, int x_size)
+{
+  asize = a_size;
+  xsize = x_size;
+  cpu_opts_init(NULL);
+}
+```
+
+2. Updated MX/LONGA/LONGI handlers to call `set_65816_sizes()` with correct 8/16 values
+
+3. Added REP/SEP tracking in instruction parsing (`syntax/merlin/syntax.c:3640-3661`):
+```c
+if (cpu_type & WDC65816) {
+  flags = parse_constexpr(&p);
+  get_65816_sizes(&cur_asize, &cur_xsize);
+  if (is_rep) {
+    new_asize = (flags & 0x20) ? 16 : cur_asize;
+    new_xsize = (flags & 0x10) ? 16 : cur_xsize;
+  } else {
+    new_asize = (flags & 0x20) ? 8 : cur_asize;
+    new_xsize = (flags & 0x10) ? 8 : cur_xsize;
+  }
+  set_65816_sizes(new_asize, new_xsize);
+}
+```
+
+4. Added 8-bit reset in `xc off` handler
+
+**Test cases**: `tests/merlin/test_65816_*.s`
 
 ### Fixed: -nocase Flag Not Working (symbol.c)
 

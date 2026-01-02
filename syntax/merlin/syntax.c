@@ -1313,9 +1313,10 @@ static void handle_op(char *s)
 
   /* Check for OFF/ON keywords */
   if (!strnicmp(cpuname, "off", 3) && len == 3) {
-    /* XC OFF - reset to 6502 */
+    /* XC OFF - reset to 6502 and 8-bit mode */
     xc_level = 0;
     set_cpu_type("6502");
+    set_65816_sizes(8, 8);  /* Reset to 8-bit A and X/Y */
   }
   else if (!strnicmp(cpuname, "on", 2) && len == 2) {
     /* XC ON - enable 65816 */
@@ -1345,7 +1346,7 @@ static void handle_op(char *s)
 static void handle_mx(char *s)
 {
   taddr flags;
-  cpuopts opts;
+  int asize, xsize;
 
   s = skip(s);
   flags = parse_constexpr(&s);
@@ -1362,17 +1363,10 @@ static void handle_mx(char *s)
   /* MX directive implies 65816 CPU - automatically enable it */
   set_cpu_type("816");
 
-  /* Set operand size hints for immediate mode instructions */
-  opts.dpage = 0;  /* Default direct page */
-  opts.asize = (flags & 2) ? 1 : 2;  /* Bit 1: A size (1=8bit, 0=16bit) */
-  opts.xsize = (flags & 1) ? 1 : 2;  /* Bit 0: X/Y size (1=8bit, 0=16bit) */
-
-  /* Create CPU options atom */
-  {
-    cpuopts *newopts = mymalloc(sizeof(cpuopts));
-    *newopts = opts;
-    add_atom(0, new_opts_atom(newopts));
-  }
+  /* Set immediate operand sizes (calls cpu_opts_init internally) */
+  asize = (flags & 2) ? 8 : 16;  /* Bit 1: A size (1=8bit, 0=16bit) */
+  xsize = (flags & 1) ? 8 : 16;  /* Bit 0: X/Y size (1=8bit, 0=16bit) */
+  set_65816_sizes(asize, xsize);
 
   eol(s);
 }
@@ -1382,7 +1376,6 @@ static void handle_mx(char *s)
 static void handle_longa(char *s)
 {
   int mode;
-  cpuopts opts;
 
   s = skip(s);
 
@@ -1403,17 +1396,8 @@ static void handle_longa(char *s)
   /* LONGA directive implies 65816 CPU - automatically enable it */
   set_cpu_type("816");
 
-  /* Set accumulator size hint */
-  opts.dpage = 0;  /* Default direct page */
-  opts.asize = mode ? 2 : 1;  /* ON=16bit(2), OFF=8bit(1) */
-  opts.xsize = 1;  /* Don't change X/Y size */
-
-  /* Create CPU options atom */
-  {
-    cpuopts *newopts = mymalloc(sizeof(cpuopts));
-    *newopts = opts;
-    add_atom(0, new_opts_atom(newopts));
-  }
+  /* Set accumulator size (X/Y defaults to 8-bit; use MX for both) */
+  set_65816_sizes(mode ? 16 : 8, 8);
 
   eol(s);
 }
@@ -1423,7 +1407,6 @@ static void handle_longa(char *s)
 static void handle_longi(char *s)
 {
   int mode;
-  cpuopts opts;
 
   s = skip(s);
 
@@ -1444,17 +1427,8 @@ static void handle_longi(char *s)
   /* LONGI directive implies 65816 CPU - automatically enable it */
   set_cpu_type("816");
 
-  /* Set index register size hint */
-  opts.dpage = 0;  /* Default direct page */
-  opts.asize = 1;  /* Don't change A size */
-  opts.xsize = mode ? 2 : 1;  /* ON=16bit(2), OFF=8bit(1) */
-
-  /* Create CPU options atom */
-  {
-    cpuopts *newopts = mymalloc(sizeof(cpuopts));
-    *newopts = opts;
-    add_atom(0, new_opts_atom(newopts));
-  }
+  /* Set index register size (A defaults to 8-bit; use MX for both) */
+  set_65816_sizes(8, mode ? 16 : 8);
 
   eol(s);
 }
@@ -1870,6 +1844,26 @@ static void handle_endif(char *s)
 {
   eol(s);
   cond_endif();
+}
+
+
+/* Merlin-specific FIN handler that tolerates extra FIN statements.
+   Original Merlin assembler appears to silently ignore FIN when there's
+   no matching DO/ELSE block, which allows constructs like:
+     do X
+     else
+       ...code...
+       fin          ; closes do/else
+       ...code...
+       fin          ; extra fin, ignored in Merlin
+   This is needed for Prince of Persia source (SPECIALK.S) */
+static void handle_fin(char *s)
+{
+  eol(s);
+  if (clev > 0)
+    cond_endif();
+  else
+    syntax_error(18);  /* warning: FIN without DO */
 }
 
 
@@ -2910,7 +2904,7 @@ struct {
   "bs",handle_spc8,       /* .BS - block storage (alias for ds) */
   "do",handle_ifne,       /* .DO - conditional start (like if) */
   "else",handle_else,     /* .ELSE - conditional else clause */
-  "fin",handle_endif,     /* .FIN - conditional end (alias for endif) */
+  "fin",handle_fin,       /* .FIN - Merlin tolerant conditional end */
   /* Merlin string directives */
   "asc",handle_as,        /* ASC - ASCII string */
   "dci",handle_at,        /* DCI - ASCII with high bit inverted on last char */
@@ -3230,10 +3224,18 @@ static char *parse_label_field(char **start,int *asntype)
       while (ISIDCHAR(*nameend))
         nameend++;
 
-      /* Prepare variable label definition - deferred until after expression is evaluated
-         This allows ]VAR = ]VAR+1 to work correctly (referencing OLD value) */
-      name = prepare_varlabel_definition(namestart, nameend - namestart);
-      is_special_label = 1;  /* Mark as special label */
+      /* Only prepare variable label definition if we're actually defining (asntype != NULL).
+         When asntype is NULL, we're just scanning during a false conditional skip and should
+         not modify variable label state. */
+      if (asntype) {
+        /* Prepare variable label definition - deferred until after expression is evaluated
+           This allows ]VAR = ]VAR+1 to work correctly (referencing OLD value) */
+        name = prepare_varlabel_definition(namestart, nameend - namestart);
+        is_special_label = 1;  /* Mark as special label */
+      }
+      else {
+        name = namestart;  /* Return raw name for skip processing */
+      }
       s = nameend;  /* Move past the label name */
     }
     else {
@@ -3414,7 +3416,8 @@ void parse(void)
           cond_skipif();
         else if (directives[idx].func == handle_else)
           cond_else();
-        else if (directives[idx].func == handle_endif)
+        else if (directives[idx].func == handle_endif ||
+                 directives[idx].func == handle_fin)
           cond_endif();
       }
       continue;
@@ -3611,9 +3614,14 @@ void parse(void)
     eol(s);
 
     /* Merlin compatibility: REP and SEP only take immediate operands,
-       so they don't require the # prefix. Add it if missing. */
+       so they don't require the # prefix. Add it if missing.
+       Also track the M/X flag changes for 65816 16-bit mode. */
     if (op_cnt == 1 && inst_len == 3 &&
         (!strnicmp(inst, "rep", 3) || !strnicmp(inst, "sep", 3))) {
+      int is_rep = !strnicmp(inst, "rep", 3);
+      char *opval = op[0];
+      taddr flags;
+
       if (*op[0] != '#') {
         /* Need to prefix operand with # - create modified operand string */
         static char immed_op[64];
@@ -3625,6 +3633,32 @@ void parse(void)
           op[0] = immed_op;
           op_len[0] = olen + 1;
         }
+      }
+      else {
+        opval++;  /* skip # */
+      }
+
+      /* Try to parse the operand as a constant to track M/X flag changes.
+         65816 P register: bit 5 = M (accumulator), bit 4 = X (index)
+         REP clears bits (0 = 16-bit), SEP sets bits (1 = 8-bit) */
+      if (cpu_type & WDC65816) {
+        char *p = opval;
+        int cur_asize, cur_xsize, new_asize, new_xsize;
+
+        flags = parse_constexpr(&p);
+        get_65816_sizes(&cur_asize, &cur_xsize);
+
+        if (is_rep) {
+          /* REP clears bits: if bit is in flags, mode becomes 16-bit */
+          new_asize = (flags & 0x20) ? 16 : cur_asize;
+          new_xsize = (flags & 0x10) ? 16 : cur_xsize;
+        }
+        else {
+          /* SEP sets bits: if bit is in flags, mode becomes 8-bit */
+          new_asize = (flags & 0x20) ? 8 : cur_asize;
+          new_xsize = (flags & 0x10) ? 8 : cur_xsize;
+        }
+        set_65816_sizes(new_asize, new_xsize);
       }
     }
 
@@ -4066,6 +4100,9 @@ int init_syntax(void)
 
   /* Merlin: Directives have NO prefix (directives like ORG, MAC, DA have no dot) */
   dotdirs = 0;
+
+  /* Merlin: Disable C-style octal prefix (leading 0 does NOT mean octal) */
+  nocprefix = 1;
 
   dirhash = new_hashtable(0x1000);
   for (i=0; i<dir_cnt; i++) {

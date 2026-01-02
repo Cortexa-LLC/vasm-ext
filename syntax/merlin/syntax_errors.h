@@ -16,7 +16,7 @@
   "invalid hex digit in HEX directive",ERROR,                        /* 15 */
   "DO without FIN",ERROR,
   "ELSE without DO",ERROR,
-  "FIN without DO",ERROR,
+  "FIN without DO",WARNING,
   "too many nested DO/FIN (maximum 63 levels)",ERROR,
   "DEND without DUM",ERROR,                                          /* 20 */
   "DUM already active",ERROR,

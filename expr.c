@@ -397,7 +397,8 @@ static expr *inclusive_or_expr(void)
   EXPSKIP();
 #ifdef DOT_AS_BITOR
   /* Merlin syntax: period (.) is bit-OR operator (e.g., RdGrp.Inc = RdGrp | Inc) */
-  while((*s=='|'&&s[1]!='|')||(*s=='!'&&s[1]!='=')||(*s=='.'&&ISIDSTART(s[1]))){
+  /* Also allow .$xx (hex), .%xx (binary), and .digits */
+  while((*s=='|'&&s[1]!='|')||(*s=='!'&&s[1]!='=')||(*s=='.'&&(ISIDSTART(s[1])||s[1]=='$'||s[1]=='%'||isdigit((unsigned char)s[1])))){
 #else
   while((*s=='|'&&s[1]!='|')||(*s=='!'&&s[1]!='=')){
 #endif

@@ -108,6 +108,23 @@ int set_cpu_type(const char *n)
 }
 
 
+void set_65816_sizes(int a_size, int x_size)
+/* Set 65816 accumulator and index register sizes (8 or 16 bits) */
+{
+  asize = a_size;
+  xsize = x_size;
+  cpu_opts_init(NULL);
+}
+
+
+void get_65816_sizes(int *a_size, int *x_size)
+/* Get current 65816 accumulator and index register sizes */
+{
+  if (a_size) *a_size = asize;
+  if (x_size) *x_size = xsize;
+}
+
+
 int parse_operand(char *p,int len,operand *op,int required)
 {
   char *start = p;

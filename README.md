@@ -44,6 +44,7 @@ vasm is a portable and retargetable assembler to create linkable objects in vari
 - **madmac** - Atari MadMac syntax (6502, 68k, Jaguar)
 - **oldstyle** - Old 8-bit style syntax
 - **scmasm** - S-C Macro Assembler 3.0/3.1 syntax *(new in this fork)*
+- **merlin** - Merlin 32 assembler syntax with 65816 support *(new in this fork)*
 
 ## Output Formats
 
@@ -288,6 +289,23 @@ Certain modules may fall under additional copyrights.
 
 **SCMASM syntax module:**
 - Bryan Woodruff, Cortexa LLC - bryanw@cortexa.com
+
+## Example Projects
+
+These projects serve as real-world test cases for the syntax modules:
+
+### Merlin Syntax
+
+- **Prince of Persia Apple II** - https://github.com/Cortexa-LLC/Prince-of-Persia-Apple-II (`modern-build` branch)
+  - Jordan Mechner's original 1989 source code
+  - Builds playable 5.25" and 3.5" disk images
+  - Tests 65816 support, local labels, macros, and Merlin-specific directives
+
+### SCASM Syntax
+
+- **S-C Macro Assembler** - https://github.com/Cortexa-LLC/scmasm
+  - S-C Macro Assembler 3.0 source code
+  - Tests three-tier label system, SCASM directives, and macro expansion
 
 ## Links
 

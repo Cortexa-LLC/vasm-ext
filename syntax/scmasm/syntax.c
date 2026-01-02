@@ -3702,6 +3702,9 @@ int init_syntax(void)
   /* SCASM: Ignore trailing content after operands (allows inline comments without ';') */
   igntrail = 1;
 
+  /* SCASM: Disable C-style octal prefix (leading 0 does NOT mean octal) */
+  nocprefix = 1;
+
   dirhash = new_hashtable(0x1000);
   for (i=0; i<dir_cnt; i++) {
     data.idx = i;
