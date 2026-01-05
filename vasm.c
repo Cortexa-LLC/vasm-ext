@@ -80,7 +80,7 @@ static section *secstack[SECSTACKSIZE];
 static int secstack_index;
 
 /* options */
-static char *listname,*dep_filename;
+static char *listname,*dep_filename,*symbols_filename;
 static int add_uscore,dwarf,fail_on_warning;
 static int verbose=1,auto_import=1;
 static taddr sec_padding;
@@ -1322,6 +1322,12 @@ int main(int argc,char **argv)
       dep_filename=argv[++i];
       continue;
     }
+    if(!strcmp("-symbols",argv[i])&&i<argc-1){
+      if(symbols_filename)
+        general_error(28,argv[i]);
+      symbols_filename=argv[++i];
+      continue;
+    }
     if(!strcmp("-unnamed-sections",argv[i])){
       unnamed_sections=1;
       continue;
@@ -1489,6 +1495,9 @@ int main(int argc,char **argv)
     if(!listname)
       listname="a.lst";
     write_listing(listname,first_section);
+  }
+  if(symbols_filename&&errors==0){
+    write_symbols_edtasm(symbols_filename);
   }
   remove_unalloc_sects();
   if(errors==0){

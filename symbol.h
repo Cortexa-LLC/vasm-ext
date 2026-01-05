@@ -100,6 +100,7 @@ regsym *new_regsym(int,int,const char *,int,unsigned int,unsigned int);
 int undef_regsym(const char *,int,int);
 #endif /* HAVE_REGSYMS */
 
+void write_symbols_edtasm(const char *);
 int init_symbol(void);
 void exit_symbol(void);
 

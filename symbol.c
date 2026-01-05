@@ -550,6 +550,84 @@ int init_symbol(void)
 }
 
 
+static int symnamecmp(const void *s1, const void *s2)
+{
+  return strcmp((*(symbol **)s1)->name, (*(symbol **)s2)->name);
+}
+
+
+void write_symbols_edtasm(const char *filename)
+{
+  FILE *f;
+  symbol *sym;
+  symbol **symarray;
+  int symcount = 0;
+  int i;
+
+  /* Count exportable symbols (labels and equates) */
+  for (sym = first_symbol; sym; sym = sym->next) {
+    if ((sym->type == LABSYM || sym->type == EXPRESSION) &&
+        !(sym->flags & (VASMINTERN | LOCAL)) &&
+        sym->name[0] != ' ') {  /* skip temp labels like " *tmp000000*" */
+      symcount++;
+    }
+  }
+
+  if (symcount == 0)
+    return;
+
+  /* Allocate array for sorting */
+  symarray = mymalloc(symcount * sizeof(symbol *));
+
+  /* Collect symbols */
+  i = 0;
+  for (sym = first_symbol; sym; sym = sym->next) {
+    if ((sym->type == LABSYM || sym->type == EXPRESSION) &&
+        !(sym->flags & (VASMINTERN | LOCAL)) &&
+        sym->name[0] != ' ') {
+      symarray[i++] = sym;
+    }
+  }
+
+  /* Sort alphabetically */
+  qsort(symarray, symcount, sizeof(symbol *), symnamecmp);
+
+  /* Write symbol file */
+  if (!(f = fopen(filename, "w"))) {
+    general_error(13, filename);  /* Cannot write to file */
+    myfree(symarray);
+    return;
+  }
+
+  fprintf(f, ";\n");
+  fprintf(f, "; AUTO GENERATED - DO NOT EDIT BY HAND\n");
+  fprintf(f, ";\n\n");
+
+  for (i = 0; i < symcount; i++) {
+    taddr value;
+    sym = symarray[i];
+
+    /* Get symbol value */
+    if (sym->type == LABSYM) {
+      value = sym->pc;
+    } else if (sym->type == EXPRESSION) {
+      if (!eval_expr(sym->expr, &value, NULL, 0)) {
+        /* If expression can't be evaluated, skip it */
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    /* Left-align name in 16-character field, then EQU and hex address */
+    fprintf(f, "%-16s EQU         $%04lx\n", sym->name, (unsigned long)value);
+  }
+
+  fclose(f);
+  myfree(symarray);
+}
+
+
 void exit_symbol(void)
 {
   if (debug) {
