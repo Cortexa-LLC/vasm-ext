@@ -27,8 +27,8 @@ install: install-bin install-share
 install-bin:
 	@echo "Installing vasm binaries to $(BINDIR)..."
 	@mkdir -p $(BINDIR)
-	@for bin in vasm6502_*; do \
-		if [ -f "$$bin" ] && [ -x "$$bin" ]; then \
+	@for bin in vasm*; do \
+		if [ -f "$$bin" ] && [ -x "$$bin" ] && [ "$${bin%.o}" = "$$bin" ]; then \
 			echo "  Installing $$bin"; \
 			install -m 755 "$$bin" $(BINDIR)/; \
 		fi; \
@@ -45,13 +45,13 @@ install-share:
 	@echo "✓ Make utilities installed"
 	@echo ""
 	@echo "Installation complete!"
-	@echo "Binaries:       $(BINDIR)/vasm6502_*"
+	@echo "Binaries:       $(BINDIR)/vasm*"
 	@echo "Make utilities: $(SHAREDIR)/make/"
 
 .PHONY: uninstall
 uninstall:
 	@echo "Removing vasm binaries from $(BINDIR)..."
-	@rm -f $(BINDIR)/vasm6502_*
+	@rm -f $(BINDIR)/vasm6502_* $(BINDIR)/vasm6809_* $(BINDIR)/vobjdump*
 	@echo "Removing vasm make utilities from $(SHAREDIR)..."
 	@rm -rf $(SHAREDIR)
 	@echo "✓ Uninstall complete"
