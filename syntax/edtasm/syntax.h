@@ -1,5 +1,6 @@
 /* syntax.h  syntax header file for vasm EDTASM syntax module */
-/* (c) 2025 */
+/* (c) in 2002-2025 by Frank Wille */
+/* EDTASM syntax adaptation (c) 2026 Bryan Woodruff, Cortexa LLC */
 
 /* macros to recognize identifiers */
 int isidchar(char);

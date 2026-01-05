@@ -1,5 +1,6 @@
 /* syntax.c  syntax module for vasm */
 /* (c) in 2002-2025 by Frank Wille */
+/* EDTASM syntax adaptation (c) 2026 Bryan Woodruff, Cortexa LLC*/
 
 #include "vasm.h"
 
@@ -12,7 +13,7 @@
    be provided by the main module.
 */
 
-const char *syntax_copyright="vasm EDTASM syntax module 1.0 (c) 2025";
+const char *syntax_copyright="vasm EDTASM syntax module 1.0 (c) 2026 Bryan Woodruff, Cortexa LLC";
 hashtable *dirhash;
 char commentchar = ';';
 int dotdirs;
