@@ -1662,7 +1662,31 @@ static char *convert_char_literals(char *s)
   static char linebuf2[4096];
   char *d = linebuf2;
 
-  while (*s && !ISEOL(s) && (d - linebuf2) < 4090) {
+  /* Process the line character by character, but skip over quoted strings
+     to avoid treating comment characters inside strings as end-of-line */
+  while (*s && (d - linebuf2) < 4090) {
+    /* Check for start of quoted string - skip over it without processing */
+    if (*s == '"' || *s == '\'') {
+      char delimiter = *s;
+      *d++ = *s++;  /* Copy opening delimiter */
+
+      /* Copy string contents until closing delimiter */
+      while (*s && *s != delimiter && (d - linebuf2) < 4090) {
+        *d++ = *s++;
+      }
+
+      /* Copy closing delimiter if present */
+      if (*s == delimiter && (d - linebuf2) < 4090) {
+        *d++ = *s++;
+      }
+      continue;
+    }
+
+    /* Check for end of line (excluding comment chars inside strings) */
+    if (*s == '\0' || iscomment(s))
+      break;
+
+    /* Process #'x character literals */
     if (*s == '#' && *(s+1) == '\'') {
       /* Found #' - convert character literal to #$xx */
       char ch = *(s+2);
@@ -1670,7 +1694,7 @@ static char *convert_char_literals(char *s)
         /* Check for EDTASM style #'x (no closing quote) */
         if (*(s+3) != '\'' &&
             (isspace((unsigned char)*(s+3)) || *(s+3) == ',' ||
-             *(s+3) == ';' || ISEOL(s+3) || *(s+3) == ')')) {
+             *(s+3) == ';' || iscomment(s+3) || *(s+3) == ')' || *(s+3) == '\0')) {
           /* EDTASM single character literal: convert #'x to #$xx */
           sprintf(d, "#$%02x", (unsigned char)ch);
           d += 4;
@@ -1698,6 +1722,7 @@ static char *convert_char_literals(char *s)
     }
   }
   *d = '\0';
+
   return linebuf2;
 }
 

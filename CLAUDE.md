@@ -450,6 +450,69 @@ Now `find_symbol()` correctly uses case-insensitive search when `-nocase` is ena
 
 **Status**: This fix is now included in upstream vasm 2.0e (pre-release). Our implementation matches the official fix.
 
+### Fixed: FCC Directive Truncating Strings at Comment Characters (EDTASM)
+
+**Bug**: The FCC directive was truncating strings when they contained comment characters (`;` or `*` in column 1), even though those characters were inside quoted strings.
+
+**Example that failed**:
+```asm
+FCC "&8N;@"    ; Would truncate at ';' to produce "&8N" instead of "&8N;@"
+```
+
+**Root Cause**:
+The `convert_char_literals()` preprocessing function (syntax/edtasm/syntax.c:1677) was using the `ISEOL()` macro in its loop condition:
+```c
+while (*s && !ISEOL(s) && (d - linebuf2) < 4090)
+```
+
+The `ISEOL()` macro is defined as:
+```c
+#define ISEOL(p) (*(p)=='\0'||iscomment(p))
+```
+
+This caused the loop to exit when encountering `;` (comment character) even inside quoted strings, prematurely truncating the line before it reached the FCC directive handler.
+
+**Fix Applied** (syntax/edtasm/syntax.c:1677-1744):
+
+Modified `convert_char_literals()` to:
+1. **Skip over quoted strings** without processing their contents
+2. **Check for comments only outside strings** using explicit `iscomment()` call
+3. **Preserve all characters inside quoted strings** including `;`, `*`, `@`, etc.
+
+Key changes:
+```c
+/* Check for start of quoted string - skip over it without processing */
+if (*s == '"' || *s == '\'') {
+  char delimiter = *s;
+  *d++ = *s++;  /* Copy opening delimiter */
+
+  /* Copy string contents until closing delimiter */
+  while (*s && *s != delimiter && (d - linebuf2) < 4090) {
+    *d++ = *s++;
+  }
+
+  /* Copy closing delimiter if present */
+  if (*s == delimiter && (d - linebuf2) < 4090) {
+    *d++ = *s++;
+  }
+  continue;
+}
+
+/* Check for end of line (excluding comment chars inside strings) */
+if (*s == '\0' || iscomment(s))
+  break;
+```
+
+**Test Cases**:
+- `FCC "&8N;@"` - semicolon inside string
+- `FCC ";;;"` - multiple semicolons
+- `FCC "***"` - asterisks (column 1 comment chars)
+- `FCC ";@*$"` - mixed special characters
+- `FCC ';test;'` - single quote delimiter with semicolon
+- `FCC "ABC" ; comment` - real comment after FCC
+
+All test cases now assemble correctly with all characters preserved inside quoted strings.
+
 ## Version and History
 
 - Current version tracked in `vasm.c` (search for `_VER`)
