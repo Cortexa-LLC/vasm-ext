@@ -263,9 +263,44 @@ This produces: `vasm6809_edtasm`
 # Case-insensitive mode (per EDTASM+ specification)
 ./vasm6809_edtasm -nocase -Fbin -o program.bin source.asm
 
+# CoCo ML format with multiple load segments (LOADM-compatible)
+./vasm6809_edtasm -Fbin -coco-ml -o program.bin source.asm
+
 # With OS-9 include files
 ./vasm6809_edtasm -I./include -Fbin -o program.bin source.asm
 ```
+
+### Output Formats
+
+**Standard Binary (`-Fbin`)**:
+- Creates flat memory image with zero-padding between sections
+- Large file size for non-contiguous segments (gaps filled with zeros)
+- Use for ROM images or emulators that expect flat memory layout
+
+**CoCo ML Format (`-Fbin -coco-ml`)**:
+- Creates TRS-80 Color Computer machine language file (LOADM-compatible)
+- Supports multiple non-contiguous load segments efficiently
+- Each segment has preamble: `$00` + length (2 bytes, big-endian) + load address (2 bytes, big-endian)
+- File ends with postamble: `$FF $00 $00` + execution address (2 bytes, big-endian)
+- Dramatically smaller file size for multi-segment programs
+- Compatible with `LOADM` and `EXEC` commands on real hardware and emulators
+
+Example with multiple ORG segments:
+```asm
+        ORG     $1000
+SEG1    FCC     "CODE"
+
+        ORG     $2000
+SEG2    FCC     "DATA"
+
+        ORG     $3000
+SEG3    FCC     "BUFFER"
+
+        END     SEG1    ; Execution starts at SEG1
+```
+
+- Standard binary: ~8KB (with zero padding)
+- CoCo ML format: ~44 bytes (only actual data + headers)
 
 ### Example
 
