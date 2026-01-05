@@ -20,6 +20,7 @@ static uint8_t dpage = 0; /* default direct page - set with SETDP */
 static int opt_off;       /* constant offset optimization 0,R to ,R */
 static int opt_bra;       /* relative branch optimization/translation */
 static int opt_pc;        /* optimize all EXT addressing to PC-relative */
+static int opt_aggressive; /* aggressive optimization: prefer short encodings */
 
 static int OC_BRA,OC_BSR,OC_LBRA,OC_LBSR;
 static int RIDX_PC;
@@ -817,8 +818,13 @@ static size_t process_instruction(instruction *ip,section *sec,
                needs 16 bits, except there was a '<' size selector */
             if (cpu_type & HC12)
               op->flags |= (op->flags&AF_LO) ? AF_OFF9 : AF_OFF16;  /* @@@ */
-            else
-              op->flags |= (op->flags&AF_LO) ? AF_OFF8 : AF_OFF16;
+            else {
+              /* In aggressive mode, try 8-bit first even for external symbols */
+              if (opt_aggressive)
+                op->flags |= AF_OFF8;
+              else
+                op->flags |= (op->flags&AF_LO) ? AF_OFF8 : AF_OFF16;
+            }
           }
           else {
             if (cpu_type & HC12) {
@@ -843,7 +849,13 @@ static size_t process_instruction(instruction *ip,section *sec,
                 if (final && (pcd<-128 || pcd>127))
                   cpu_error(3,(long)pcd);  /* pc-rel. offset out of range */
               }
-              else if (!(op->flags&AF_HI) && pcd>=-129 && pcd<=126) {
+              else if (!(op->flags&AF_HI) && (pcd>=-129 && pcd<=126)) {
+                if (secrel)
+                  pcd = op->curval - (pc + 1);
+                op->flags |= AF_OFF8;
+              }
+              else if (opt_aggressive && !secrel && !(op->flags&AF_HI)) {
+                /* Aggressive: assume 8-bit will work for unresolved symbols */
                 if (secrel)
                   pcd = op->curval - (pc + 1);
                 op->flags |= AF_OFF8;
@@ -907,6 +919,10 @@ static size_t process_instruction(instruction *ip,section *sec,
               op->flags |= AF_OFF5;
             else if (abs && val>=-128 && val<=127 && !wreg)
               op->flags |= AF_OFF8;
+            else if (opt_aggressive && !abs && !wreg) {
+              /* Aggressive: try 8-bit for unresolved constant offsets */
+              op->flags |= AF_OFF8;
+            }
             else
               op->flags |= AF_OFF16;
           }
@@ -931,13 +947,22 @@ static size_t process_instruction(instruction *ip,section *sec,
         /* optimize/translate Bcc and LBcc instructions */
         if (opt_bra && i==0 && (op->flags & AF_PCREL)) {
           int ocsz_diff;
+          int longbranch_code = -1;
 
           switch (op->mode) {
             case AM_REL8:
-              if ((pcd<-128 || pcd>127) &&
-                  (mnemonics[ip->code+2].operand_type[0] & OTMASK) == RLL) {
+              /* Determine the long branch opcode for this short branch */
+              if (ip->code == OC_BRA)
+                longbranch_code = OC_LBRA;
+              else if (ip->code == OC_BSR)
+                longbranch_code = OC_LBSR;
+              else if (ip->code >= 0 && ip->code+2 < mnemonic_cnt &&
+                       (mnemonics[ip->code+2].operand_type[0] & OTMASK) == RLL)
+                longbranch_code = ip->code+2;
+
+              if ((pcd<-128 || pcd>127) && longbranch_code >= 0) {
                 op->mode = AM_REL16;
-                ip->code += 2;
+                ip->code = longbranch_code;
                 ocsz_diff = (mnemonics[ip->code].ext.opcode[OCSTD]>0xff? 2 : 1)
                             - (pc - orig_pc);
                 pc += ocsz_diff;       /* LBcc opcode may be larger */
@@ -969,8 +994,21 @@ static size_t process_instruction(instruction *ip,section *sec,
                 cpu_error(9,(long)pcd);  /* decrement branch out of range */
               break;
             case AM_REL16:
-              if (pcd<-0x8000 || pcd>0xffff)
+              /* Allow forward wraparound in 16-bit address space */
+              if (pcd < -0x8000) {
+                /* Negative offset out of range - try forward wraparound */
+                taddr wrapped = pcd + 0x10000;
+                if (wrapped >= 0 && wrapped <= 0xffff) {
+                  /* Wraparound is valid - use wrapped offset */
+                  pcd = wrapped;
+                }
+                else {
+                  cpu_error(10,(long)pcd);  /* long branch out of range */
+                }
+              }
+              else if (pcd > 0xffff) {
                 cpu_error(10,(long)pcd);  /* long branch out of range */
+              }
               break;
           }
         }
@@ -1454,6 +1492,11 @@ int cpu_args(char *p)
     opt_bra = 1;
   else if (!strcmp(p,"-opt-pc"))
     opt_pc = 1;
+  else if (!strcmp(p,"-opt-aggressive")) {
+    opt_off = 1;  /* enable all optimizations */
+    opt_bra = 1;
+    opt_aggressive = 1;
+  }
   else
     return 0;
 

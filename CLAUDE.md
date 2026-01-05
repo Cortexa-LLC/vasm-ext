@@ -227,6 +227,153 @@ getparam
 
 When building disk images (e.g., Prince of Persia), the binary sizes will differ from snap-built versions. Disk layout files must be adjusted to accommodate the correct (larger) binary sizes. This is a one-time adjustment and ensures proper IIgs compatibility.
 
+## EDTASM Syntax Module
+
+The EDTASM syntax module (`syntax/edtasm/`) provides compatibility with Disk EDTASM+ assembler for TRS-80 Color Computer 6809/6309 development.
+
+### Features
+
+- **Comment handling**: Asterisk (`*`) in column 1, semicolon (`;`) anywhere
+- **Case sensitivity**: Case-sensitive by default, `-nocase` flag for case-insensitive mode
+- **Dollar signs in identifiers**: Support for OS-9 system calls (`F$Link`, `I$Read`, `E$EOF`, etc.)
+- **Data directives**: FCB, FDB, FCC (with flexible delimiters), RMB
+- **Conditional assembly**: COND/ENDC, IFEQ/IFNE/IFGT/IFGE/IFLT/IFLE, ELSE, ENDIF
+- **Macro system**: MACRO/ENDM with double-backslash notation
+  - `\\1` through `\\9` - Macro parameters 1-9
+  - `\\@` - Unique ID for this invocation (generates `_nnnnnn`)
+  - `\\.label` - Local label unique to this macro invocation
+- **Sections**: SECTION, ORG
+- **Listing control**: OPT, PAGE, TITLE, LIST, NOLIST
+- **OS-9 support**: MOD directive, system call definitions
+
+### Build
+
+```bash
+make CPU=6809 SYNTAX=edtasm
+```
+
+This produces: `vasm6809_edtasm`
+
+### Usage
+
+```bash
+# Case-sensitive mode (default)
+./vasm6809_edtasm -Fbin -o program.bin source.asm
+
+# Case-insensitive mode (per EDTASM+ specification)
+./vasm6809_edtasm -nocase -Fbin -o program.bin source.asm
+
+# With OS-9 include files
+./vasm6809_edtasm -I./include -Fbin -o program.bin source.asm
+```
+
+### Example
+
+```asm
+* EDTASM+ example for TRS-80 Color Computer
+        INCLUDE os9.d           ; OS-9 definitions
+
+* Macro with parameters and local labels
+WAITKEY MACRO
+        LDA     #'?'
+        JSR     PUTCHAR
+\\.WAIT JSR     GETCHAR         ; Local label
+        BEQ     \\.WAIT         ; Branch to local
+        ENDM
+
+* Data directives
+        ORG     $1000
+START   FCB     1,2,3           ; Bytes
+        FDB     $1234,$5678     ; Words
+MSG     FCC     /Hello!/        ; String (flexible delimiter)
+BUF     RMB     256             ; Reserve space
+
+* Conditional assembly
+DEBUG   EQU     1
+        COND    DEBUG
+        JSR     DEBUGOUT        ; Only if DEBUG != 0
+        ENDC
+
+* Macro invocation
+        WAITKEY                 ; Expands with unique labels
+        WAITKEY                 ; Each gets different local labels
+
+* OS-9 system calls
+        LDA     #READ
+        LDX     #FILENAME
+        OS9     I$Open          ; Dollar sign in identifier
+        BCS     ERROR
+
+        END     START
+```
+
+### Architecture Details
+
+The EDTASM module was built by forking the Motorola syntax module and adapting it:
+
+**Key modifications:**
+1. **Comment handling** - Added asterisk-in-column-1 check in `iscomment()`
+2. **Identifier characters** - Added dollar sign to `isidchar()` for OS-9 system calls
+3. **Macro expansion** - Modified `expand_macro()` for double-backslash notation:
+   - Changed from `\1` to `\\1` (requires checking for two consecutive backslashes)
+   - Added `\\@` for unique ID generation
+   - Added `\\.label` for macro-local labels using `make_local_label()`
+4. **Directive table** - Simplified from 200+ directives to 46 EDTASM essentials
+5. **Case handling** - Made case-sensitive by default, added `-nocase` flag
+6. **Removed mot-specific code** - Stripped PhxAss/Devpac compatibility, alignment options
+
+**Files:**
+- `syntax/edtasm/syntax.c` - Main implementation (~2520 lines)
+- `syntax/edtasm/syntax.h` - Interface definitions (~25 lines)
+- `syntax/edtasm/syntax_errors.h` - Error messages (inherited from mot)
+
+### OS-9 Support
+
+**Current Status:**
+- ✓ MOD directive recognized and parsed
+- ✓ OS-9 system call identifiers (F$Link, I$Read, etc.)
+- ✓ OS-9 include file (os9.d) with system definitions
+- ✓ OS9 macro for generating SWI2 + FCB system calls
+- ⚠ OS-9 module header generation is a stub (future enhancement)
+
+**Future Enhancement:**
+
+Proper OS-9 module format support requires:
+- Module header sync bytes ($87CD)
+- Module size calculation
+- Header parity byte
+- Module CRC generation
+- Module type/language/attributes encoding
+
+This will enable direct generation of loadable OS-9 modules without post-processing.
+
+### Test Cases
+
+Successfully assembles real-world OS-9 code:
+
+**Invaders09** - Classic Space Invaders for OS-9 (https://github.com/barberd/Invaders09)
+- 41,000+ lines of 6809 assembly
+- Heavy use of macros with parameters
+- OS-9 system calls throughout
+- Conditional assembly
+- Complex data structures
+
+### Differences from Original EDTASM
+
+1. **Case sensitivity default**: Original EDTASM+ was case-insensitive. This implementation defaults to case-sensitive for compatibility with existing mixed-case code. Use `-nocase` for traditional behavior.
+
+2. **Expression evaluator**: Uses vasm's powerful 128-bit expression evaluator with complex relocations, more capable than original EDTASM.
+
+3. **Macro system**: Based on vasm's robust macro infrastructure with proper nesting and recursion support.
+
+4. **MOD directive**: Currently a stub. Full OS-9 module header generation planned for future release.
+
+### Documentation
+
+- **Detailed syntax reference**: `syntax/edtasm/README.md`
+- **OS-9 include file**: Example in Invaders09 project
+- **Original EDTASM manual**: Available from CoCo community archives
+
 ## Bug Fixes Applied
 
 ### Fixed: 65816 16-bit Immediate Mode (Merlin syntax)

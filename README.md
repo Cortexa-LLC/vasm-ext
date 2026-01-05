@@ -16,6 +16,94 @@ vasm is a portable and retargetable assembler to create linkable objects in vari
 - Macro support, include directives, conditional assembly, local symbols
 - Cross-platform (Unix/Linux, macOS, Windows, Amiga, Atari)
 
+## Architecture
+
+vasm uses a modular three-layer architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        vasm Core Engine                         │
+│  ┌──────────────┬──────────────┬──────────────┬──────────────┐ │
+│  │   vasm.c     │   atom.c     │   expr.c     │  symbol.c    │ │
+│  │  Main Driver │ Atomic       │ Expression   │ Symbol Table │ │
+│  │  Multi-pass  │ Objects      │ Evaluator    │ Management   │ │
+│  └──────────────┴──────────────┴──────────────┴──────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                 ↓
+         ┌───────────────────────┼───────────────────────┐
+         ↓                       ↓                       ↓
+  ┌─────────────┐         ┌─────────────┐       ┌─────────────┐
+  │   Syntax    │         │     CPU     │       │   Output    │
+  │   Module    │────────→│   Module    │──────→│   Module    │
+  │             │         │             │       │             │
+  │ • Parse     │         │ • Encode    │       │ • ELF       │
+  │ • Macros    │         │ • Optimize  │       │ • Binary    │
+  │ • Locals    │         │ • Relax     │       │ • Hex       │
+  └─────────────┘         └─────────────┘       └─────────────┘
+       ↓                        ↓                      ↓
+  oldstyle               6502 family              Raw binary
+  mot                    6809 family              ELF object
+  scmasm                 68k family               S-Record
+  merlin                 ARM                      Intel-Hex
+  edtasm                 PowerPC                  Amiga hunk
+  ...                    ...                      ...
+```
+
+### Module Data Flow
+
+```
+ Source File                              Object File
+     ↓                                         ↑
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Syntax Module          Parse source, create atoms            │
+│    ├─ Read lines          ┌──────────────────────┐              │
+│    ├─ Process macros      │   Atom Chain         │              │
+│    ├─ Handle directives   │  ┌────┬────┬────┐   │              │
+│    └─ Create atoms        │  │Lab │Inst│Data│   │              │
+│                           │  └────┴────┴────┘   │              │
+│                           └──────────────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│ 2. CPU Module             Encode instructions                   │
+│    ├─ Validate operands   ┌──────────────────────┐              │
+│    ├─ Select addressing   │   Machine Code       │              │
+│    ├─ Optimize sizes      │  ┌────────────────┐  │              │
+│    └─ Generate bytes      │  │ $A9 $00 $8D... │  │              │
+│                           │  └────────────────┘  │              │
+│                           └──────────────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│ 3. Core Engine            Multi-pass resolution                 │
+│    ├─ Pass 1-200: Fast   ┌──────────────────────┐              │
+│    ├─ Pass 201+: Safe    │   Symbol Table       │              │
+│    ├─ Resolve symbols    │  ┌────────────────┐  │              │
+│    ├─ Apply relocations  │  │ label: $1000   │  │              │
+│    └─ Optimize branches  │  │ const: 42      │  │              │
+│                           │  └────────────────┘  │              │
+│                           └──────────────────────┘              │
+├─────────────────────────────────────────────────────────────────┤
+│ 4. Output Module          Generate output                       │
+│    ├─ Format headers      ┌──────────────────────┐              │
+│    ├─ Write sections      │   Output Format      │              │
+│    ├─ Generate symbols    │  ┌────────────────┐  │              │
+│    └─ Create relocations  │  │ ELF / BIN / S19│  │              │
+│                           │  └────────────────┘  │              │
+│                           └──────────────────────┘              │
+└─────────────────────────────────────────────────────────────────┘
+                                    ↓
+                          vasm6809_edtasm -Fbin -o out.bin in.asm
+```
+
+### Binary Naming Convention
+
+Each vasm binary is named using the pattern: `vasm<CPU>_<SYNTAX>`
+
+Examples:
+- `vasm6502_scmasm` - 6502 CPU with SCMASM syntax
+- `vasm6809_edtasm` - 6809 CPU with EDTASM syntax
+- `vasmm68k_mot` - 68k CPU with Motorola syntax
+- `vasm6502_merlin` - 6502/65816 with Merlin syntax
+
+**Documentation:** See `syntax/README.md` for detailed module documentation
+
 ## Supported CPUs
 
 - **6502 family** - 6502, 65C02, 65CE02, DTV, 45GS02, HU6280, 65802, 65816
@@ -45,6 +133,7 @@ vasm is a portable and retargetable assembler to create linkable objects in vari
 - **oldstyle** - Old 8-bit style syntax
 - **scmasm** - S-C Macro Assembler 3.0/3.1 syntax *(new in this fork)*
 - **merlin** - Merlin 32 assembler syntax with 65816 support *(new in this fork)*
+- **edtasm** - Disk EDTASM+ syntax for TRS-80 Color Computer/OS-9 *(new in this fork)*
 
 ## Output Formats
 
@@ -256,6 +345,32 @@ This fork includes a complete implementation of the S-C Macro Assembler (SCMASM)
 make CPU=6502 SYNTAX=scmasm
 ./vasm6502_scmasm -Fbin -o program.bin source.s
 ```
+
+## EDTASM Syntax Module (New)
+
+This fork includes a complete implementation of Disk EDTASM+ syntax for TRS-80 Color Computer and OS-9 development.
+
+**Key EDTASM Features:**
+- Comments: `*` in column 1, `;` anywhere
+- Case-sensitive by default, `-nocase` flag for case-insensitive mode
+- Dollar signs in identifiers (for OS-9 system calls like `F$Link`)
+- Data directives: FCB, FDB, FCC (flexible delimiters), RMB
+- Conditional assembly: COND/ENDC, IFEQ/IFNE/IFGT/IFGE/IFLT/IFLE
+- Macros: MACRO/ENDM with `\\1-\\9` parameters, `\\@` unique ID, `\\.label` local labels
+- OS-9 support: MOD directive, include files with system definitions
+
+**Documentation:** See `syntax/edtasm/README.md`
+
+**Build and use:**
+```bash
+make CPU=6809 SYNTAX=edtasm
+./vasm6809_edtasm -Fbin -o program.bin source.asm
+
+# Case-insensitive mode (per EDTASM+ spec)
+./vasm6809_edtasm -nocase -Fbin -o program.bin source.asm
+```
+
+**Note:** OS-9 module header generation is currently a stub. Proper OS-9 module format support is planned for future release.
 
 ## Platform-Specific Makefiles
 
