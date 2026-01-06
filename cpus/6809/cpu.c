@@ -23,6 +23,10 @@ static int opt_pc;        /* optimize all EXT addressing to PC-relative */
 static int opt_aggressive; /* aggressive optimization: prefer short encodings */
 
 static int OC_BRA,OC_BSR,OC_LBRA,OC_LBSR;
+static int OC_BHI,OC_BLS,OC_BCC,OC_BCS,OC_BNE,OC_BEQ,OC_BVC,OC_BVS;
+static int OC_BPL,OC_BMI,OC_BGE,OC_BLT,OC_BGT,OC_BLE;
+static int OC_LBHI,OC_LBLS,OC_LBCC,OC_LBCS,OC_LBNE,OC_LBEQ,OC_LBVC,OC_LBVS;
+static int OC_LBPL,OC_LBMI,OC_LBGE,OC_LBLT,OC_LBGT,OC_LBLE;
 static int RIDX_PC;
 
 static const struct CPUReg registers[] = {
@@ -956,9 +960,35 @@ static size_t process_instruction(instruction *ip,section *sec,
                 longbranch_code = OC_LBRA;
               else if (ip->code == OC_BSR)
                 longbranch_code = OC_LBSR;
-              else if (ip->code >= 0 && ip->code+2 < mnemonic_cnt &&
-                       (mnemonics[ip->code+2].operand_type[0] & OTMASK) == RLL)
-                longbranch_code = ip->code+2;
+              /* Conditional branches */
+              else if (ip->code == OC_BHI)
+                longbranch_code = OC_LBHI;
+              else if (ip->code == OC_BLS)
+                longbranch_code = OC_LBLS;
+              else if (ip->code == OC_BCC)
+                longbranch_code = OC_LBCC;
+              else if (ip->code == OC_BCS)
+                longbranch_code = OC_LBCS;
+              else if (ip->code == OC_BNE)
+                longbranch_code = OC_LBNE;
+              else if (ip->code == OC_BEQ)
+                longbranch_code = OC_LBEQ;
+              else if (ip->code == OC_BVC)
+                longbranch_code = OC_LBVC;
+              else if (ip->code == OC_BVS)
+                longbranch_code = OC_LBVS;
+              else if (ip->code == OC_BPL)
+                longbranch_code = OC_LBPL;
+              else if (ip->code == OC_BMI)
+                longbranch_code = OC_LBMI;
+              else if (ip->code == OC_BGE)
+                longbranch_code = OC_LBGE;
+              else if (ip->code == OC_BLT)
+                longbranch_code = OC_LBLT;
+              else if (ip->code == OC_BGT)
+                longbranch_code = OC_LBGT;
+              else if (ip->code == OC_BLE)
+                longbranch_code = OC_LBLE;
 
               if ((pcd<-128 || pcd>127) && longbranch_code >= 0) {
                 op->mode = AM_REL16;
@@ -1448,6 +1478,9 @@ int init_cpu(void)
 {
   int i;
 
+  /* Branch optimization is disabled by default.
+   * Enable with -opt-branch or syntax module flag (e.g., -auto-branch for EDTASM) */
+
   for (i=0; i<mnemonic_cnt; i++) {
     if (mnemonics[i].ext.flags & cpu_type) {
       if (!strcmp(mnemonics[i].name,"bra"))
@@ -1458,6 +1491,64 @@ int init_cpu(void)
         OC_LBRA = i;
       else if (!strcmp(mnemonics[i].name,"lbsr"))
         OC_LBSR = i;
+      /* Conditional branches */
+      else if (!strcmp(mnemonics[i].name,"bhi"))
+        OC_BHI = i;
+      else if (!strcmp(mnemonics[i].name,"bls"))
+        OC_BLS = i;
+      else if (!strcmp(mnemonics[i].name,"bcc"))
+        OC_BCC = i;
+      else if (!strcmp(mnemonics[i].name,"bcs"))
+        OC_BCS = i;
+      else if (!strcmp(mnemonics[i].name,"bne"))
+        OC_BNE = i;
+      else if (!strcmp(mnemonics[i].name,"beq"))
+        OC_BEQ = i;
+      else if (!strcmp(mnemonics[i].name,"bvc"))
+        OC_BVC = i;
+      else if (!strcmp(mnemonics[i].name,"bvs"))
+        OC_BVS = i;
+      else if (!strcmp(mnemonics[i].name,"bpl"))
+        OC_BPL = i;
+      else if (!strcmp(mnemonics[i].name,"bmi"))
+        OC_BMI = i;
+      else if (!strcmp(mnemonics[i].name,"bge"))
+        OC_BGE = i;
+      else if (!strcmp(mnemonics[i].name,"blt"))
+        OC_BLT = i;
+      else if (!strcmp(mnemonics[i].name,"bgt"))
+        OC_BGT = i;
+      else if (!strcmp(mnemonics[i].name,"ble"))
+        OC_BLE = i;
+      /* Long conditional branches */
+      else if (!strcmp(mnemonics[i].name,"lbhi"))
+        OC_LBHI = i;
+      else if (!strcmp(mnemonics[i].name,"lbls"))
+        OC_LBLS = i;
+      else if (!strcmp(mnemonics[i].name,"lbcc"))
+        OC_LBCC = i;
+      else if (!strcmp(mnemonics[i].name,"lbcs"))
+        OC_LBCS = i;
+      else if (!strcmp(mnemonics[i].name,"lbne"))
+        OC_LBNE = i;
+      else if (!strcmp(mnemonics[i].name,"lbeq"))
+        OC_LBEQ = i;
+      else if (!strcmp(mnemonics[i].name,"lbvc"))
+        OC_LBVC = i;
+      else if (!strcmp(mnemonics[i].name,"lbvs"))
+        OC_LBVS = i;
+      else if (!strcmp(mnemonics[i].name,"lbpl"))
+        OC_LBPL = i;
+      else if (!strcmp(mnemonics[i].name,"lbmi"))
+        OC_LBMI = i;
+      else if (!strcmp(mnemonics[i].name,"lbge"))
+        OC_LBGE = i;
+      else if (!strcmp(mnemonics[i].name,"lblt"))
+        OC_LBLT = i;
+      else if (!strcmp(mnemonics[i].name,"lbgt"))
+        OC_LBGT = i;
+      else if (!strcmp(mnemonics[i].name,"lble"))
+        OC_LBLE = i;
     }
   }
 
@@ -1501,4 +1592,11 @@ int cpu_args(char *p)
     return 0;
 
   return 1;
+}
+
+
+/* Allow syntax modules to enable branch optimization */
+void enable_branch_optimization(int enable)
+{
+  opt_bra = enable ? 1 : 0;
 }

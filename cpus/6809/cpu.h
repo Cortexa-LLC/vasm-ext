@@ -293,3 +293,4 @@ struct CPUReg {
 
 /* exported by cpu.c */
 int cpu_available(int);
+void enable_branch_optimization(int);

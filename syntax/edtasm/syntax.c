@@ -1128,7 +1128,22 @@ static void handle_opt(char *s)
 
 static void handle_end(char *s)
 {
+  /* END directive stops parsing
+   * Optional parameter specifies execution start address/label
+   * Format: END [<label>|<address>]
+   *
+   * Note: The execution address is primarily informational in EDTASM.
+   * To use it with output formats like CoCo ML (-coco-ml), specify
+   * the start symbol using the -exec=<symbol> command line option.
+   */
   parse_end = 1;
+
+  s = skip(s);
+  if (*s && !ISEOL(s)) {
+    /* Optional execution address/label specified - parse but don't use it yet */
+    strbuf *startlabel = parse_identifier(0,&s);
+    /* Future enhancement: could export this symbol or store it for output modules */
+  }
 }
 
 
@@ -2074,6 +2089,12 @@ static int check_directive(char **line)
   hashdata data;
 
   s = skip(*line);
+
+  /* EDTASM+ extension: skip optional leading dot for Motorola compatibility
+   * This allows both "MACRO" and ".macro" syntax */
+  if (*s == '.')
+    s++;
+
   if (!ISIDSTART(*s))
     return -1;
   name = s++;
@@ -2350,9 +2371,73 @@ void parse(void)
 #else
       else {
 #endif
-        label = new_labsym(0,labname);
-        label->flags |= symflags;
-        add_atom(0,new_label_atom(label));
+        /* Check if this is actually a directive, not a label
+         * If the line starts in column 1 (no leading whitespace) and
+         * the identifier is a directive name, treat it as a directive */
+        if (!isspace((unsigned char)*line)) {
+          char *test_line = line;
+          int dir_idx = check_directive(&test_line);
+          if (dir_idx >= 0) {
+            /* It's a directive, not a label - reprocess from start */
+            s = line;
+            /* Fall through to directive processing below */
+          }
+          else {
+            /* Not a directive, treat as label */
+            label = new_labsym(0,labname);
+            label->flags |= symflags;
+            add_atom(0,new_label_atom(label));
+          }
+        }
+        else {
+          /* Line starts with whitespace, so definitely a label */
+          label = new_labsym(0,labname);
+          label->flags |= symflags;
+          add_atom(0,new_label_atom(label));
+        }
+      }
+    }
+    else if (isspace((unsigned char)*line)) {
+      /* Special case: allow labels with leading whitespace for EQU/SET/MACRO
+         This is common in many assembler variants */
+      char *p = skip(line);
+      char *labelstart = p;
+      strbuf *namebuf;
+
+      if (namebuf = parse_identifier(0,&p)) {
+        char *afterlabel = skip(p);
+
+        if (!strnicmp(afterlabel,"equ",3) && isspace((unsigned char)*(afterlabel+3))) {
+          /* Label with leading whitespace followed by EQU */
+          symbol *label;
+          s = skip(afterlabel+3);
+          s = convert_dot_to_star(s);
+          label = new_equate(namebuf->str,parse_expr_tmplab(&s));
+          continue;
+        }
+        else if (*afterlabel=='=') {
+          /* Label with leading whitespace followed by = */
+          symbol *label;
+          s = skip(afterlabel+1);
+          s = convert_dot_to_star(s);
+          label = new_equate(namebuf->str,parse_expr_tmplab(&s));
+          continue;
+        }
+        else if (!strnicmp(afterlabel,"set",3) && isspace((unsigned char)*(afterlabel+3))) {
+          /* Label with leading whitespace followed by SET */
+          symbol *label;
+          s = skip(afterlabel+3);
+          s = convert_dot_to_star(s);
+          label = new_abs(namebuf->str,parse_expr_tmplab(&s));
+          continue;
+        }
+        else if (!strnicmp(afterlabel,"macro",5) &&
+                 (isspace((unsigned char)*(afterlabel+5)) || *(afterlabel+5)=='\0'
+                  || *(afterlabel+5)==commentchar)) {
+          /* Label with leading whitespace followed by MACRO */
+          new_macro(namebuf->str,macro_dirlist,endm_dirlist,NULL);
+          continue;
+        }
       }
     }
 
@@ -2555,9 +2640,38 @@ int expand_macro(source *src,char **line,char *d,int dlen)
 }
 
 
+/* Check for EDTASM+ binary literal with B suffix
+ * Format: [01]+B (e.g., 0000000000000001B)
+ * Returns 2 if it's a binary literal with B suffix, 0 otherwise
+ */
+static int binary_suffix(char *s)
+{
+  char *p = s;
+
+  /* Must start with at least one binary digit (0 or 1) */
+  if (*p != '0' && *p != '1')
+    return 0;
+
+  /* Scan through all binary digits */
+  while (*p == '0' || *p == '1')
+    p++;
+
+  /* Check for 'B' or 'b' suffix */
+  if ((*p == 'B' || *p == 'b') && !ISIDCHAR(*(p+1))) {
+    return 2;  /* base 2 (binary) */
+  }
+
+  return 0;
+}
+
+
 char *const_prefix(char *s,int *base)
 {
+  /* EDTASM+ extension: check for binary literals with B suffix first
+   * This handles cases like 0000000000000001B */
   if (isdigit((unsigned char)*s)) {
+    if ((*base = binary_suffix(s)))
+      return s;
     *base = 10;
     return s;
   }
@@ -2580,6 +2694,10 @@ char *const_prefix(char *s,int *base)
 
 char *const_suffix(char *start,char *end)
 {
+  /* Skip 'B' suffix for binary literals */
+  if (binary_suffix(start))
+    return end+1;
+
   return end;
 }
 
@@ -2661,6 +2779,13 @@ int syntax_args(char *p)
        Default is case-sensitive for compatibility with existing code */
     nocase = 1;
     nocase_macros = 1;
+    return 1;
+  }
+  else if (!strcmp(p,"-auto-branch")) {
+    /* Enable automatic long branch promotion
+       Converts short branches (BEQ, BNE, BRA, etc.) to long branches
+       (LBEQ, LBNE, LBRA, etc.) when target is out of range */
+    enable_branch_optimization(1);
     return 1;
   }
   return 0;

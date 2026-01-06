@@ -447,7 +447,11 @@ static struct namelen *dirlist_match(char *s,char *e,struct namelen *list)
   }
 #endif
 
-  if (!ISIDSTART(*s) || (!isspace((unsigned char )*(s-1)) && *(s-1)!='\0'))
+  /* EDTASM+ extension: skip optional leading dot for Motorola compatibility */
+  if (*s == '.')
+    s++;
+
+  if (!ISIDSTART(*s) || (!isspace((unsigned char )*(s-1)) && *(s-1)!='\0' && *(s-1)!='.'))
     return NULL;  /* cannot be start of directive */
 
   name = s++;
