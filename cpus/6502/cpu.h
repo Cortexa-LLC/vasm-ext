@@ -142,6 +142,9 @@ enum {
 
 /* exported by cpu.c */
 extern uint16_t cpu_type;
+
+/* Syntax-module configurable flags */
+extern int allow_trailing_comments;  /* Allow informal comments after operands (Merlin compatibility) */
 int cpu_available(int);
 int parse_cpu_label(char *,char **);
 int set_cpu_type(const char *);

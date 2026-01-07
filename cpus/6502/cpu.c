@@ -15,6 +15,7 @@ const char *cpuname = "6502";
 int bytespertaddr = 2;
 
 uint16_t cpu_type = M6502;
+int allow_trailing_comments = 0;  /* Syntax modules can enable for Merlin compatibility */
 static int auto_mask,branchopt,dp_offset;
 static uint16_t dpage;    /* zero/direct page (default 0) - set with SETDP */
 static uint8_t asize = 8; /* Accumulator is 8 bits by default */
@@ -332,8 +333,13 @@ int parse_operand(char *p,int len,operand *op,int required)
   }
 
   p = skip(p);
-  if (*p && p-start<len)
-    cpu_error(1);  /* trailing garbage in operand */
+  if (*p && p-start<len) {
+    /* Check if syntax module allows trailing comments (Merlin compatibility).
+       Original Merlin allowed informal comments after operands without semicolons.
+       Examples: "lda #-5 impaled" or "lda #99 stabbed" */
+    if (!allow_trailing_comments)
+      cpu_error(1);  /* trailing garbage in operand */
+  }
   return ret;
 }
 
