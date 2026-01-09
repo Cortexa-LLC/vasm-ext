@@ -1,8 +1,8 @@
 PRE = obj$(TARGET)/$(CPU)_$(SYNTAX)_
 
-OUTFMTS = -DOUTAOF -DOUTAOUT -DOUTBIN -DOUTCOFF -DOUTELF -DOUTGST -DOUTHANS \
-          -DOUTHUNK -DOUTIHEX -DOUTO65 -DOUTPAP -DOUTSREC -DOUTTOS -DOUTVOBJ \
-          -DOUTWOZ -DOUTXFIL
+OUTFMTS = -DOUTAOF -DOUTAOUT -DOUTBIN -DOUTCMD -DOUTCOFF -DOUTELF -DOUTGST \
+          -DOUTHANS -DOUTHUNK -DOUTIHEX -DOUTO65 -DOUTPAP -DOUTSREC -DOUTTOS \
+          -DOUTVOBJ -DOUTWOZ -DOUTXFIL
 
 OBJS = $(PRE)vasm.o $(PRE)atom.o $(PRE)expr.o $(PRE)symtab.o $(PRE)symbol.o \
        $(PRE)error.o $(PRE)parse.o $(PRE)reloc.o $(PRE)hugeint.o \
@@ -12,9 +12,10 @@ OBJS = $(PRE)vasm.o $(PRE)atom.o $(PRE)expr.o $(PRE)symtab.o $(PRE)symbol.o \
        $(PRE)output_test.o $(PRE)output_elf.o $(PRE)output_bin.o \
        $(PRE)output_vobj.o $(PRE)output_hunk.o $(PRE)output_aout.o \
        $(PRE)output_tos.o $(PRE)output_xfile.o $(PRE)output_srec.o \
-       $(PRE)output_cdef.o $(PRE)output_ihex.o $(PRE)output_o65.o \
-       $(PRE)output_gst.o $(PRE)output_woz.o $(PRE)output_pap.o \
-       $(PRE)output_hans.o $(PRE)output_coff.o $(PRE)output_aof.o
+       $(PRE)output_cdef.o $(PRE)output_cmd.o $(PRE)output_ihex.o \
+       $(PRE)output_o65.o $(PRE)output_gst.o $(PRE)output_woz.o \
+       $(PRE)output_pap.o $(PRE)output_hans.o $(PRE)output_coff.o \
+       $(PRE)output_aof.o
 
 VODOBJS = obj$(TARGET)/vobjdump.o
 
@@ -123,6 +124,9 @@ $(PRE)output_xfile.o: output_xfile.c output_xfile.h vasm.h symbol.h supp.h atom.
 
 $(PRE)output_cdef.o: output_cdef.c vasm.h symbol.h supp.h atom.h
 	$(CC) $(INCLUDES) $(CFLAGS) output_cdef.c $(CCOUT)$(PRE)output_cdef.o
+
+$(PRE)output_cmd.o: output_cmd.c vasm.h symbol.h supp.h atom.h
+	$(CC) $(INCLUDES) $(CFLAGS) output_cmd.c $(CCOUT)$(PRE)output_cmd.o
 
 $(PRE)output_ihex.o: output_ihex.c vasm.h symbol.h supp.h atom.h
 	$(CC) $(INCLUDES) $(CFLAGS) output_ihex.c $(CCOUT)$(PRE)output_ihex.o

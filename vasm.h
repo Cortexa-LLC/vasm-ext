@@ -295,3 +295,4 @@ int init_output_pap(char **,void (**)(FILE *,section *,symbol *),int (**)(char *
 int init_output_hans(char **,void (**)(FILE *,section *,symbol *),int (**)(char *));
 int init_output_coff(char **,void (**)(FILE *,section *,symbol *),int (**)(char *));
 int init_output_aof(char **,void (**)(FILE *,section *,symbol *),int (**)(char *));
+int init_output_cmd(char **,void (**)(FILE *,section *,symbol *),int (**)(char *));

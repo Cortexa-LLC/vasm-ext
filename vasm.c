@@ -671,6 +671,7 @@ static struct {
   "aout",0,init_output_aout,
   "bin",0,init_output_bin,
   "cdef",0,init_output_cdef,
+  "cmd",0,init_output_cmd,
   "coff",0,init_output_coff,
   "dri",0,init_output_tos,
   "elf",0,init_output_elf,

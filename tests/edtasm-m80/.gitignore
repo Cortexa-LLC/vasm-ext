@@ -1,0 +1,14 @@
+# Generated test outputs
+*.bin
+*.log
+*.lst
+*.o
+*.obj
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor files
+*~
+.DS_Store

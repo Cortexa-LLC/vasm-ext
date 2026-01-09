@@ -1,6 +1,220 @@
-# CLAUDE.md
+# vasm-ext - AI-Assisted Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**Project:** vasm-ext - Portable and retargetable assembler
+**Language:** ANSI C90
+**Repository:** https://github.com/[your-org]/vasm-ext
+
+This file provides guidance to Claude Code (claude.ai/code) and other AI assistants when working with code in this repository.
+
+---
+
+## ⚠️ CRITICAL: Task Packet Requirement
+
+**BEFORE starting ANY non-trivial task, you MUST:**
+
+1. **Create task packet directory:** `.ai/tasks/YYYY-MM-DD_task-name/`
+2. **Copy ALL templates** from `.ai-pack/templates/task-packet/`
+3. **Fill out 00-contract.md** with requirements and acceptance criteria
+4. **Fill out 10-plan.md** with implementation approach
+5. **ONLY THEN** begin implementation
+
+**Non-Trivial = Any task that:**
+- Requires >2 steps
+- Involves code changes
+- Takes >30 minutes
+- Needs verification
+
+**This is MANDATORY. Do not skip this step.**
+
+```bash
+# Create task packet
+TASK_ID=$(date +%Y-%m-%d)_task-name
+mkdir -p .ai/tasks/$TASK_ID
+cp .ai-pack/templates/task-packet/*.md .ai/tasks/$TASK_ID/
+```
+
+---
+
+## Framework Integration
+
+This project uses the **ai-pack framework** (v1.0.0) for structured AI-assisted development.
+
+### Directory Structure
+
+```
+vasm-ext/
+├── .ai-pack/           # Git submodule (read-only shared framework)
+│   ├── gates/          # Quality gates
+│   ├── roles/          # Agent roles
+│   ├── workflows/      # Development workflows
+│   ├── templates/      # Task-packet templates
+│   └── quality/        # Clean code standards
+├── .ai/                # Local workspace (project-specific)
+│   ├── tasks/          # Active task packets
+│   └── repo-overrides.md  # C90-specific overrides (IMPORTANT!)
+└── CLAUDE.md           # This file
+```
+
+---
+
+## Required Reading: Gates and Standards
+
+Before any task, read these foundational documents:
+
+### Quality Gates (Must Follow)
+
+1. **[.ai-pack/gates/00-global-gates.md](.ai-pack/gates/00-global-gates.md)** - Universal rules (safety, quality, communication)
+2. **[.ai-pack/gates/10-persistence.md](.ai-pack/gates/10-persistence.md)** - File operations and state management
+3. **[.ai-pack/gates/20-tool-policy.md](.ai-pack/gates/20-tool-policy.md)** - Tool usage policies
+4. **[.ai-pack/gates/25-execution-strategy.md](.ai-pack/gates/25-execution-strategy.md)** - Parallel execution strategy
+5. **[.ai-pack/gates/30-verification.md](.ai-pack/gates/30-verification.md)** - Verification requirements
+6. **[.ai-pack/gates/35-code-quality-review.md](.ai-pack/gates/35-code-quality-review.md)** - Code quality review
+
+### Engineering Standards
+
+- **[.ai-pack/quality/engineering-standards.md](.ai-pack/quality/engineering-standards.md)** - Clean code standards index
+- **[.ai-pack/quality/clean-code/](.ai-pack/quality/clean-code/)** - Detailed standards by topic
+
+### **CRITICAL: Project-Specific Overrides**
+
+- **[.ai/repo-overrides.md](.ai/repo-overrides.md)** - **MUST READ!** C90-specific rules that override ai-pack C++ defaults
+
+**Key Overrides:**
+- This is C90, not C++
+- 2-space indentation (not 4)
+- TDD only for new code (not legacy vasm)
+- C-style patterns (no classes, vtables, etc.)
+
+---
+
+## Role Selection
+
+Choose your role based on the task:
+
+### Available Roles
+
+| Role | When to Use | Reference |
+|------|-------------|-----------|
+| **Orchestrator** | Complex multi-step tasks requiring coordination | [orchestrator.md](.ai-pack/roles/orchestrator.md) |
+| **Engineer** | Implementing specific, well-defined tasks | [engineer.md](.ai-pack/roles/engineer.md) |
+| **Inspector** | Bug investigation and root cause analysis | [inspector.md](.ai-pack/roles/inspector.md) |
+| **Architect** | Technical design and system architecture | [architect.md](.ai-pack/roles/architect.md) |
+| **Tester** | Testing specialist, validates TDD compliance | [tester.md](.ai-pack/roles/tester.md) |
+| **Reviewer** | Quality assurance, code review | [reviewer.md](.ai-pack/roles/reviewer.md) |
+| **Product Manager** | Requirements specialist, creates PRDs | [product-manager.md](.ai-pack/roles/product-manager.md) |
+
+---
+
+## Workflow Selection
+
+Choose appropriate workflow for the task type:
+
+| Task Type | Workflow | When to Use |
+|-----------|----------|-------------|
+| General | [standard.md](.ai-pack/workflows/standard.md) | Any task not fitting specialized workflows |
+| New Feature | [feature.md](.ai-pack/workflows/feature.md) | Adding new functionality |
+| Bug Fix | [bugfix.md](.ai-pack/workflows/bugfix.md) | Fixing defects |
+| Refactoring | [refactor.md](.ai-pack/workflows/refactor.md) | Improving code structure |
+| Investigation | [research.md](.ai-pack/workflows/research.md) | Understanding code/architecture |
+
+---
+
+## Project-Specific Context
+
+### Technology Stack
+
+- **Language:** ANSI C90
+- **Compiler:** gcc/clang with `-std=c90 -O2 -pedantic`
+- **Build System:** Make (modular with CPU/SYNTAX parameters)
+- **Platforms:** Unix, Linux, macOS, Windows, Amiga, Atari
+
+### Key Architectural Patterns
+
+- **Modular Plugin Architecture:** CPU modules, Syntax modules, Output modules
+- **Multi-pass Assembly:** Up to 1500 passes for symbol resolution and optimization
+- **Atom-based IR:** Linked list of atoms (labels, instructions, data) per section
+- **Hash-based Symbol Tables:** Fast symbol lookup with case-sensitive/insensitive support
+
+### Critical Files and Directories
+
+- **vasm.c** - Main driver and multi-pass resolver
+- **atom.c/h** - Atomic IR objects (LABEL, INSTRUCTION, DATA, etc.)
+- **symbol.c/h, symtab.c/h** - Symbol table management
+- **expr.c/h** - 128-bit expression evaluator
+- **cpus/\<cpu\>/** - CPU module plugins
+- **syntax/\<syntax\>/** - Syntax module plugins
+- **output_\*.c** - Output format modules
+- **Makefile, make.rules** - Build system
+
+### Testing Strategy
+
+- **Test Framework:** vasm assembly tests (`tests/<syntax>/test_*.s`)
+- **Coverage Target:** 80-90% for NEW code only (not legacy vasm)
+- **Test Commands:** `make CPU=<cpu> SYNTAX=<syntax> && ./test_suite`
+
+### Build and Deploy
+
+```bash
+# Build specific assembler variant
+make CPU=6502 SYNTAX=merlin
+
+# Build EDTASM variant
+make CPU=6809 SYNTAX=edtasm
+
+# Clean build artifacts
+make CPU=6502 SYNTAX=merlin clean
+
+# Test new code
+./vasm6502_merlin -Fbin -o test.bin test_input.s
+```
+
+---
+
+## Invariants (Critical)
+
+### ✅ DO
+
+- Create task packets in `.ai/tasks/` before non-trivial work
+- Follow gates and workflows from `.ai-pack/`
+- **Read `.ai/repo-overrides.md` for C90-specific rules**
+- Write ANSI C90-compliant code (no C++ features)
+- Use 2-space indentation (vasm style, not ai-pack C++ default)
+- Test new code thoroughly (TDD for new code only)
+- Respect module boundaries
+- Update CLAUDE.md for significant changes
+
+### ❌ NEVER
+
+- Put task packets in `.ai-pack/` (use `.ai/tasks/`)
+- Edit `.ai-pack/` files directly (contribute to ai-pack repo instead)
+- Use C++ features or syntax
+- Mix tabs and spaces
+- Skip testing new code
+- Commit failing tests
+- Apply TDD/coverage requirements to legacy vasm code
+
+---
+
+## Quick Reference
+
+**Framework:**
+- Gates: `.ai-pack/gates/`
+- Roles: `.ai-pack/roles/`
+- Workflows: `.ai-pack/workflows/`
+- Templates: `.ai-pack/templates/`
+- Standards: `.ai-pack/quality/`
+
+**Project:**
+- Overrides: `.ai/repo-overrides.md` **(MUST READ!)**
+- Task Packets: `.ai/tasks/YYYY-MM-DD_task-name/`
+
+**Help:**
+- Framework: `.ai-pack/README.md`
+- Standards: `.ai-pack/quality/engineering-standards.md`
+
+---
+
+# vasm Project Documentation
 
 ## Overview
 
@@ -38,7 +252,7 @@ The resulting executable will be named `vasm<CPU>_<SYNTAX>` (e.g., `vasm6502_old
 - 6502, 6800, 6809, arm, c16x, hans, jagrisc, m68k, pdp11, ppc, qnice, spc700, test, tr3200, unsp, vidcore, x86
 
 **Syntax Modules** (in `syntax/`):
-- oldstyle, std, mot, madmac, test
+- oldstyle, std, mot, madmac, merlin, edtasm, test
 
 ### Platform-Specific Makefiles
 
@@ -553,3 +767,9 @@ All test cases now assemble correctly with all characters preserved inside quote
 - Current version tracked in `vasm.c` (search for `_VER`)
 - Release history in `history` file
 - Copyright: (c) 2002-2025 Volker Barthelmann and Frank Wille
+
+---
+
+**Last Updated:** 2026-01-08
+**Framework Version:** 1.0.0 (Foundation)
+**vasm Version:** See `vasm.c`

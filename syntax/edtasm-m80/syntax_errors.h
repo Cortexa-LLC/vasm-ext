@@ -28,3 +28,5 @@
   "conditional assembly for pass 2 is not really supported, assuming false",
     WARNING,
   "modified memory attributes for section \"%s\"",ERROR,
+  "LOCAL directive can only be used inside macros",ERROR,                /* 29 */
+  "invalid label name",ERROR,                                            /* 30 */

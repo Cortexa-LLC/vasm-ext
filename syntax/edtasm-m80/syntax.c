@@ -86,6 +86,19 @@ static const char *saved_last_global_label;
 static char inl_lab_name[8];
 static int local_id;
 
+/* M80 LOCAL directive support */
+#define MAX_LOCAL_LABELS 64
+static unsigned long local_label_counter = 0;
+
+struct local_label {
+  char *declared_name;    /* "LOOP" */
+  char *unique_name;      /* "??0001" */
+  struct local_label *next;
+};
+
+/* Per-macro-invocation local labels (stored during macro definition) */
+static struct local_label *current_local_labels = NULL;
+
 static int parse_end = 0;
 static expr *carg1;
 
@@ -319,6 +332,108 @@ static atom *do_space(int size,expr *cnt,expr *fill)
   a->align = 1;
   add_atom(0,a);
   return a;
+}
+
+
+/* M80 LOCAL directive helper functions */
+
+static void add_local_label(struct local_label **list, char *name)
+{
+  struct local_label *local;
+  char unique[16];
+
+  /* Generate unique name: ??nnnn format */
+  sprintf(unique, "??%04lu", local_label_counter++);
+
+  /* Allocate and initialize local label entry */
+  local = mymalloc(sizeof(struct local_label));
+  local->declared_name = mystrdup(name);
+  local->unique_name = mystrdup(unique);
+  local->next = *list;
+  *list = local;
+}
+
+static char *find_local_label(struct local_label *list, char *name)
+{
+  struct local_label *local;
+
+  for (local = list; local != NULL; local = local->next) {
+    if (nocase) {
+      if (!stricmp(local->declared_name, name))
+        return local->unique_name;
+    }
+    else {
+      if (!strcmp(local->declared_name, name))
+        return local->unique_name;
+    }
+  }
+  return NULL;
+}
+
+static void free_local_labels(struct local_label **list)
+{
+  struct local_label *local;
+  struct local_label *next;
+
+  local = *list;
+  while (local != NULL) {
+    next = local->next;
+    myfree(local->declared_name);
+    myfree(local->unique_name);
+    myfree(local);
+    local = next;
+  }
+  *list = NULL;
+}
+
+static void handle_m80_local(char *s)
+{
+  char *name;
+
+  /* LOCAL directive can only be used inside macros */
+  if (cur_src == NULL || cur_src->macro == NULL) {
+    syntax_error(29);  /* "LOCAL directive can only be used inside macros" */
+    return;
+  }
+
+  /* Parse comma-separated list of label names */
+  for (;;) {
+    s = skip(s);
+
+    /* Parse identifier */
+    name = s;
+    if (ISIDSTART(*s)) {
+      s++;
+      while (ISIDCHAR(*s))
+        s++;
+
+      /* Add to current local label list */
+      if (s > name) {
+        char *labname;
+        int len;
+
+        len = s - name;
+        labname = mymalloc(len + 1);
+        memcpy(labname, name, len);
+        labname[len] = '\0';
+
+        add_local_label(&current_local_labels, labname);
+
+        myfree(labname);
+      }
+    }
+    else {
+      syntax_error(30);  /* "invalid label name" */
+      break;
+    }
+
+    s = skip(s);
+    if (*s != ',')
+      break;
+    s++;  /* Skip comma */
+  }
+
+  eol(s);
 }
 
 
@@ -1381,6 +1496,46 @@ static void handle_endr(char *s)
 }
 
 
+/* M80 IRP and IRPC directives */
+
+static void do_irp(int type, char *s)
+{
+  strbuf *name;
+
+  /* Parse iteration variable name */
+  if (!(name = parse_identifier(0,&s))) {
+    syntax_error(10);  /* identifier expected */
+    return;
+  }
+
+  s = skip(s);
+  if (*s == ',')
+    s = skip(s+1);
+
+  /* Create repeat block with iteration values */
+  new_repeat(type, name->str, mystrdup(s), rept_dirlist, endr_dirlist);
+}
+
+static void handle_irp(char *s)
+{
+  do_irp(REPT_IRP, s);
+}
+
+static void handle_irpc(char *s)
+{
+  do_irp(REPT_IRPC, s);
+}
+
+
+/* M80 EXITM directive - exit macro early */
+
+static void handle_exitm(char *s)
+{
+  leave_macro();
+  eol(s);
+}
+
+
 static void handle_macro(char *s)
 {
   strbuf *name;
@@ -2121,6 +2276,12 @@ struct {
   /* Macros */
   "macro",0,handle_macro,
   "endm",0,handle_endm,
+  "exitm",0,handle_exitm,         /* M80 exit macro */
+  "local",0,handle_m80_local,     /* M80 local labels */
+  "rept",0,handle_rept,           /* M80 repeat block */
+  "endr",0,handle_endr,           /* End repeat */
+  "irp",0,handle_irp,             /* M80 iterate through list */
+  "irpc",0,handle_irpc,           /* M80 iterate through characters */
 
   /* Include */
   "include",0,handle_include,
@@ -2634,14 +2795,42 @@ int expand_macro(source *src,char **line,char *d,int dlen)
 {
   int nc = 0;
   char *s = *line;
+  char *varname;
+  int varlen;
 
-  if (*s++ == '\\' && *s == '\\') {
-    /* EDTASM requires double backslash for macro expansion */
-    s++;  /* Skip second backslash */
+  /* Check for IRP/IRPC iteration variable first */
+  if (src->irpname) {
+    varname = s;
+    varlen = 0;
 
-    if (*s >= '1' && *s <= '9') {
-      /* \\1 through \\9 : insert macro parameter 1..9 */
-      int pnum = *s++ - '0';
+    /* Check if this identifier matches the IRP variable name */
+    if (ISIDSTART(*s)) {
+      while (ISIDCHAR(*s)) {
+        s++;
+        varlen++;
+      }
+
+      if (varlen == strlen(src->irpname)) {
+        if (nocase) {
+          if (!strnicmp(varname, src->irpname, varlen))
+            goto found_irp;
+        }
+        else {
+          if (!strncmp(varname, src->irpname, varlen))
+            goto found_irp;
+        }
+      }
+      s = varname;  /* Reset if no match */
+    }
+  }
+
+  /* Z80 EDTASM-M80: Use # prefix for macro parameter expansion */
+  if (*s++ == '#') {
+    /* Check for #P1-#P9 parameter syntax (case-insensitive) */
+    if ((*s == 'P' || *s == 'p') && *(s+1) >= '1' && *(s+1) <= '9') {
+      /* #P1 through #P9 : insert macro parameter 1..9 */
+      int pnum = *(s+1) - '0';
+      s += 2;  /* Skip 'P' and digit */
       if (src->num_params > 0 && pnum <= src->num_params) {
         if (src->param[pnum-1] && src->param_len[pnum-1]) {
           if (dlen >= src->param_len[pnum-1]) {
@@ -2654,9 +2843,9 @@ int expand_macro(source *src,char **line,char *d,int dlen)
       }
     }
 
-    else if (*s == '@') {
-      /* \\@ : insert a unique id "_nnnnnn" */
-      s++;
+    else if (*s == '$' && (*(s+1) == 'Y' || *(s+1) == 'y') && (*(s+2) == 'M' || *(s+2) == 'm')) {
+      /* #$YM : insert a unique id "_nnnnnn" for this macro invocation (case-insensitive) */
+      s += 3;  /* Skip '$YM' */
       if (dlen > 7) {
         nc = sprintf(d, "_%06lu", src->id);
       }
@@ -2664,8 +2853,10 @@ int expand_macro(source *src,char **line,char *d,int dlen)
         nc = -1;
     }
 
-    else if (*s == '.') {
-      /* \\.label : create local label within macro */
+    /* Keep support for #.label syntax (legacy 6809 EDTASM local labels)
+       This will be replaced by LOCAL directive in Phase 2 Week 2 */
+    else if (*s == '.' && ISIDSTART(*(s+1))) {
+      /* #.label : create local label within macro */
       char *labname;
       s++;
       labname = s;
@@ -2692,6 +2883,20 @@ int expand_macro(source *src,char **line,char *d,int dlen)
   }
 
   return nc;  /* number of chars written to line buffer, -1: out of space */
+
+found_irp:
+  /* Substitute IRP/IRPC variable */
+  if (src->irpvals && src->irpvals->argname) {
+    int len = strlen(src->irpvals->argname);
+    if (dlen >= len) {
+      memcpy(d, src->irpvals->argname, len);
+      nc = len;
+      *line = varname + varlen;  /* Skip past variable name */
+    }
+    else
+      nc = -1;
+  }
+  return nc;
 }
 
 
