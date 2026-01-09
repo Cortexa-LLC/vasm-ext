@@ -1,0 +1,8 @@
+# Python dependencies for TRS-80 disk image tools
+# Install with: pip install -r requirements.txt
+
+# No external dependencies required!
+# All tools use Python standard library only.
+
+# Optional: For enhanced features
+# None currently needed

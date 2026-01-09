@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test files
+test.dmk
+*.tmp
+
+# Generated disk images (except in disk-images/ root)
+*.dmk
+!../../disk-images/*.dmk
