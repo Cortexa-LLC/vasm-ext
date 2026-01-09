@@ -1,0 +1,13 @@
+# Task packets directory
+#
+# This directory contains task packets created during AI-assisted development.
+# Each task packet follows the format: YYYY-MM-DD_task-name/
+#
+# Task packets contain:
+# - 00-contract.md - Requirements and acceptance criteria
+# - 10-plan.md - Implementation plan
+# - 20-work-log.md - Execution log
+# - 30-review.md - Review findings
+# - 40-acceptance.md - Sign-off and completion
+#
+# See .ai-pack/templates/task-packet/ for templates

@@ -1,0 +1,3 @@
+[submodule ".ai-pack"]
+	path = .ai-pack
+	url = git@github.com:Cortexa-LLC/ai-pack.git
