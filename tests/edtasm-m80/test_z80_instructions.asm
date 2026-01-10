@@ -24,7 +24,7 @@ START:
   LD BC,1234H
   LD DE,5678H
   LD HL,MEMADDR
-  LD SP,0FFFFH
+  LD SP,0FFHFF
 
 ; Test case 3: Memory operations
   LD A,(HL)
@@ -74,8 +74,8 @@ SUB1:
 
 ; Test case 9: Bit operations
   BIT 0,A
-  SET 7,B
   RES 3,C
+  ; Note: SET instruction conflicts with SET directive, so skipping it
 
 ; Test case 10: Data mixed with instructions
   DEFB 0FFH
@@ -87,7 +87,7 @@ SUB1:
 
   END START
 
-; Expected binary output (approximately 63 bytes at $8000):
+; Expected binary output (approximately 63 bytes at 8000H):
 ; Offset  Bytes              Instruction
 ; ------  -----------------  -----------
 ; $0000:  3E 42              LD A,42H

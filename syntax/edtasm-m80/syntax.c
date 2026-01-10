@@ -30,7 +30,7 @@ static char fo_name[] = "__FO";
 static char line_name[] = "__LINE__";
 
 static struct namelen macro_dirlist[] = {
-  { 5,"macro" }, { 0,0 }
+  { 5,"macro" }, { 5,"local" }, { 0,0 }
 };
 static struct namelen endm_dirlist[] = {
   { 4,"endm" }, { 0,0 }
@@ -98,6 +98,32 @@ struct local_label {
 
 /* Per-macro-invocation local labels (stored during macro definition) */
 static struct local_label *current_local_labels = NULL;
+static char *current_macro_name = NULL;  /* Track macro being defined */
+
+/* Macro -> LOCAL label mapping */
+struct macro_local_map {
+  char *macro_name;               /* Name of macro */
+  struct local_label *local_list; /* List of LOCAL labels for this macro */
+  struct macro_local_map *next;   /* Linked list */
+};
+
+static struct macro_local_map *macro_local_head = NULL;
+
+/* Per-invocation LOCAL label substitutions */
+struct local_subst {
+  char *declared_name;            /* Original LOCAL label name */
+  char *unique_name;              /* Generated unique name for this invocation */
+  struct local_subst *next;
+};
+
+/* Invocation ID -> LOCAL substitution mapping */
+struct invocation_locals {
+  unsigned long src_id;           /* source->id for this invocation */
+  struct local_subst *subst_list; /* Substitutions for this invocation */
+  struct invocation_locals *next;
+};
+
+static struct invocation_locals *invocation_locals_head = NULL;
 
 static int parse_end = 0;
 static expr *carg1;
@@ -386,51 +412,257 @@ static void free_local_labels(struct local_label **list)
   *list = NULL;
 }
 
+
+/* Store LOCAL labels for a macro definition */
+static void store_macro_locals(char *macro_name, struct local_label *local_list)
+{
+  struct macro_local_map *map;
+  struct local_label *src_local;
+  struct local_label *dst_local;
+  struct local_label **dst_tail;
+
+  /* Don't store if no LOCAL labels */
+  if (local_list == NULL)
+    return;
+
+  /* Allocate new mapping entry */
+  map = mymalloc(sizeof(struct macro_local_map));
+  map->macro_name = mystrdup(macro_name);
+  map->local_list = NULL;
+  dst_tail = &map->local_list;
+
+  /* Copy LOCAL label list (just the declared_name, not unique_name) */
+  for (src_local = local_list; src_local != NULL; src_local = src_local->next) {
+    dst_local = mymalloc(sizeof(struct local_label));
+    dst_local->declared_name = mystrdup(src_local->declared_name);
+    dst_local->unique_name = NULL;  /* Will be generated per invocation */
+    dst_local->next = NULL;
+    *dst_tail = dst_local;
+    dst_tail = &dst_local->next;
+  }
+
+  /* Add to head of list */
+  map->next = macro_local_head;
+  macro_local_head = map;
+}
+
+
+/* Get LOCAL label list for a macro */
+static struct local_label *get_macro_locals(char *macro_name)
+{
+  struct macro_local_map *map;
+
+  for (map = macro_local_head; map != NULL; map = map->next) {
+    if (nocase) {
+      if (!stricmp(map->macro_name, macro_name))
+        return map->local_list;
+    }
+    else {
+      if (!strcmp(map->macro_name, macro_name))
+        return map->local_list;
+    }
+  }
+  return NULL;
+}
+
+
+/* Finalize LOCAL labels for current macro being defined */
+static void finalize_current_macro_locals(void)
+{
+  if (current_macro_name != NULL && current_local_labels != NULL) {
+    /* Store the accumulated LOCAL labels for this macro */
+    store_macro_locals(current_macro_name, current_local_labels);
+  }
+
+  /* Clear for next macro */
+  if (current_macro_name != NULL) {
+    myfree(current_macro_name);
+    current_macro_name = NULL;
+  }
+  free_local_labels(&current_local_labels);
+}
+
+
+/* Generate per-invocation LOCAL label substitutions */
+static void generate_invocation_locals(source *src)
+{
+  struct local_label *macro_local;
+  struct local_subst *subst;
+  struct local_subst **subst_tail;
+  struct invocation_locals *inv_locals;
+  char unique[16];
+
+  /* Get LOCAL labels for this macro */
+  if (src->macro == NULL)
+    return;
+
+  macro_local = get_macro_locals(src->macro->name);
+  if (macro_local == NULL)
+    return;  /* No LOCAL labels for this macro */
+
+  /* Check if we already generated substitutions for this invocation */
+  for (inv_locals = invocation_locals_head; inv_locals != NULL; inv_locals = inv_locals->next) {
+    if (inv_locals->src_id == src->id)
+      return;  /* Already generated */
+  }
+
+  /* Create new invocation locals entry */
+  inv_locals = mymalloc(sizeof(struct invocation_locals));
+  inv_locals->src_id = src->id;
+  inv_locals->subst_list = NULL;
+  subst_tail = &inv_locals->subst_list;
+
+  /* Generate unique names for each LOCAL label */
+  for (; macro_local != NULL; macro_local = macro_local->next) {
+    /* Use _Lnnnn format (L for LOCAL) to match valid identifier syntax */
+    sprintf(unique, "_L%04lu", local_label_counter++);
+
+    subst = mymalloc(sizeof(struct local_subst));
+    subst->declared_name = mystrdup(macro_local->declared_name);
+    subst->unique_name = mystrdup(unique);
+    subst->next = NULL;
+
+    *subst_tail = subst;
+    subst_tail = &subst->next;
+  }
+
+  /* Add to head of list */
+  inv_locals->next = invocation_locals_head;
+  invocation_locals_head = inv_locals;
+}
+
+
+/* Find LOCAL label substitution for current invocation */
+static char *find_invocation_local(source *src, char *name, int len)
+{
+  struct invocation_locals *inv_locals;
+  struct local_subst *subst;
+
+  /* Find substitutions for this invocation */
+  for (inv_locals = invocation_locals_head; inv_locals != NULL; inv_locals = inv_locals->next) {
+    if (inv_locals->src_id == src->id) {
+      /* Found the right invocation - now find the label */
+      for (subst = inv_locals->subst_list; subst != NULL; subst = subst->next) {
+        if (nocase) {
+          if (strlen(subst->declared_name) == len &&
+              !strnicmp(subst->declared_name, name, len))
+            return subst->unique_name;
+        }
+        else {
+          if (strlen(subst->declared_name) == len &&
+              !strncmp(subst->declared_name, name, len))
+            return subst->unique_name;
+        }
+      }
+      break;
+    }
+  }
+  return NULL;
+}
+
+
+/* Substitute LOCAL label name if we're in a macro and this is a LOCAL label */
+static char *substitute_local_label(char *labname)
+{
+  char *unique;
+
+  if (cur_src == NULL || cur_src->macro == NULL)
+    return labname;  /* Not in a macro */
+
+  /* Generate LOCAL label substitutions if needed */
+  generate_invocation_locals(cur_src);
+
+  /* Check if this label name is a LOCAL label */
+  unique = find_invocation_local(cur_src, labname, strlen(labname));
+  if (unique != NULL)
+    return unique;  /* Use unique name */
+
+  return labname;  /* Not a LOCAL label, use as-is */
+}
+
+
 static void handle_m80_local(char *s)
 {
   char *name;
+  char *macro_name_to_use = NULL;
 
-  /* LOCAL directive can only be used inside macros */
-  if (cur_src == NULL || cur_src->macro == NULL) {
+  /* LOCAL can be encountered in two contexts:
+     1. During macro DEFINITION (rare - if LOCAL is outside macro body)
+     2. During macro EXPANSION (common - when vasm reads the macro body) */
+
+  if (cur_src && cur_src->macro) {
+    /* We're EXPANDING a macro */
+    macro_name_to_use = cur_src->macro->name;
+
+    /* Check if we already have LOCAL labels for this macro */
+    if (get_macro_locals(macro_name_to_use) != NULL) {
+      eol(s);
+      return;  /* Already processed, just ignore this directive */
+    }
+  }
+  else if (current_macro_name) {
+    /* We're DEFINING a macro - store labels for the macro being defined */
+    macro_name_to_use = current_macro_name;
+  }
+  else {
+    /* Not in a macro at all - error */
     syntax_error(29);  /* "LOCAL directive can only be used inside macros" */
     return;
   }
 
   /* Parse comma-separated list of label names */
-  for (;;) {
-    s = skip(s);
+  {
+    struct local_label *temp_list = NULL;
+    int is_expansion = (cur_src && cur_src->macro);
 
-    /* Parse identifier */
-    name = s;
-    if (ISIDSTART(*s)) {
-      s++;
-      while (ISIDCHAR(*s))
+    for (;;) {
+      s = skip(s);
+
+      /* Parse identifier */
+      name = s;
+      if (ISIDSTART(*s)) {
         s++;
+        while (ISIDCHAR(*s))
+          s++;
 
-      /* Add to current local label list */
-      if (s > name) {
-        char *labname;
-        int len;
+        /* Add to appropriate label list */
+        if (s > name) {
+          char *labname;
+          int len;
 
-        len = s - name;
-        labname = mymalloc(len + 1);
-        memcpy(labname, name, len);
-        labname[len] = '\0';
+          len = s - name;
+          labname = mymalloc(len + 1);
+          memcpy(labname, name, len);
+          labname[len] = '\0';
 
-        add_local_label(&current_local_labels, labname);
+          if (is_expansion) {
+            /* During expansion - add to temporary list */
+            add_local_label(&temp_list, labname);
+          }
+          else {
+            /* During definition - add to current_local_labels */
+            add_local_label(&current_local_labels, labname);
+          }
 
-        myfree(labname);
+          myfree(labname);
+        }
       }
-    }
-    else {
-      syntax_error(30);  /* "invalid label name" */
-      break;
+      else {
+        syntax_error(30);  /* "invalid label name" */
+        break;
+      }
+
+      s = skip(s);
+      if (*s != ',')
+        break;
+      s++;  /* Skip comma */
     }
 
-    s = skip(s);
-    if (*s != ',')
-      break;
-    s++;  /* Skip comma */
+    /* If we collected labels during expansion, store them immediately */
+    if (is_expansion && temp_list) {
+      store_macro_locals(macro_name_to_use, temp_list);
+      free_local_labels(&temp_list);
+    }
   }
 
   eol(s);
@@ -1539,9 +1771,77 @@ static void handle_exitm(char *s)
 static void handle_macro(char *s)
 {
   strbuf *name;
+  macro *m;
 
-  if (name = parse_identifier(0,&s))
+  /* Finalize LOCAL labels for previous macro (if any) */
+  finalize_current_macro_locals();
+
+  if (name = parse_identifier(0,&s)) {
+    /* Track this macro for LOCAL label storage */
+    current_macro_name = mystrdup(name->str);
     new_macro(name->str,macro_dirlist,endm_dirlist,NULL);
+
+    /* Find the newly created macro and scan for LOCAL directives */
+    m = find_macro(name->str,0);
+    if (m && m->text) {
+      char *p = m->text;
+      char *end = p + m->size;
+
+      /* Scan macro text for LOCAL directives */
+      while (p < end) {
+        /* Skip leading whitespace */
+        while (p < end && (*p == ' ' || *p == '\t'))
+          p++;
+
+        /* Check if this line starts with LOCAL directive */
+        if (p < end && (p + 5) <= end &&
+            (nocase ? !strnicmp(p, "local", 5) : !strncmp(p, "local", 5)) &&
+            (p + 5 >= end || !ISIDCHAR(p[5]))) {
+          /* Found LOCAL directive - parse label names */
+          char *s2 = p + 5;
+
+          /* Skip to label names */
+          while (s2 < end && (*s2 == ' ' || *s2 == '\t'))
+            s2++;
+
+          /* Parse comma-separated label list */
+          while (s2 < end && *s2 != '\n' && *s2 != '\r' && *s2 != '\0') {
+            if (ISIDSTART(*s2)) {
+              char *label_start = s2;
+              while (s2 < end && ISIDCHAR(*s2))
+                s2++;
+
+              /* Add this label to current_local_labels */
+              if (s2 > label_start) {
+                char *labname;
+                int len = s2 - label_start;
+
+                labname = mymalloc(len + 1);
+                memcpy(labname, label_start, len);
+                labname[len] = '\0';
+
+                add_local_label(&current_local_labels, labname);
+
+                myfree(labname);
+              }
+            }
+
+            /* Skip whitespace and commas */
+            while (s2 < end && (*s2 == ' ' || *s2 == '\t' || *s2 == ','))
+              s2++;
+          }
+        }
+
+        /* Skip to end of line */
+        while (p < end && *p != '\n' && *p != '\r')
+          p++;
+
+        /* Skip newline characters */
+        while (p < end && (*p == '\n' || *p == '\r'))
+          p++;
+      }
+    }
+  }
   else
     syntax_error(10);  /* identifier expected */
 }
@@ -1761,6 +2061,12 @@ static char *handle_iif(char *line_ptr)
 
 static void handle_ifeq(char *s)
 {
+  ifexp(s,0);
+}
+
+static void handle_ife(char *s)
+{
+  /* IFE (M80): If Expression Equals zero - same as IFEQ */
   ifexp(s,0);
 }
 
@@ -2233,7 +2539,7 @@ struct {
   "defh",0,handle_d16,          /* Define Halfword (alias for DEFW) */
   "defs",0,handle_rmb,          /* Define Space (same as RMB) */
   "defm",0,handle_fcc,          /* Define Message (same as FCC for now) */
-  "defl",0,handle_dummy_expr,   /* Define Label - redefinable (same as SET) */
+  "defl",0,handle_dummy_expr,   /* Define Label - redefinable (handled in parse()) */
 
   /* M80 data directive aliases */
   "db",0,handle_d8,             /* Define Byte (M80 alias) */
@@ -2260,6 +2566,7 @@ struct {
   "ifle",DT_IF,handle_ifle,
 
   /* M80 advanced conditionals */
+  "ife",DT_IF,handle_ife,         /* Assemble if expression equals zero (M80) */
   "if1",DT_IF,handle_ifp1,        /* Assemble on pass 1 */
   "if2",DT_IF,handle_ifp2,        /* Assemble on pass 2+ */
   "ifdef",DT_IF,handle_ifd,       /* Assemble if symbol defined */
@@ -2483,6 +2790,159 @@ static int execute_struct(char *name,int name_len,char *s)
 #endif
 
 
+/* Preprocess line to handle & concatenation operator
+ * M80-compatible token concatenation:
+ *   FOO&BAR    -> FOOBAR
+ *   #P1&SUFFIX -> (param1)SUFFIX
+ *   A&B&C      -> ABC
+ * The & operator and surrounding whitespace are removed.
+ * & inside quoted strings is preserved as literal character.
+ * Returns preprocessed line in static buffer.
+ */
+static char *preprocess_concatenation(char *line)
+{
+  static char preprocessed[4096];
+  char *s = line;
+  char *d = preprocessed;
+  int in_string = 0;
+  char string_delim = 0;
+
+  while (*s && (d - preprocessed) < 4095) {
+    /* Track string state */
+    if ((*s == '"' || *s == '\'') && !in_string) {
+      in_string = 1;
+      string_delim = *s;
+      *d++ = *s++;
+      continue;
+    }
+    else if (in_string && *s == string_delim) {
+      in_string = 0;
+      *d++ = *s++;
+      continue;
+    }
+
+    /* Inside string: copy as-is (including &) */
+    if (in_string) {
+      *d++ = *s++;
+      continue;
+    }
+
+    /* Check for & concatenation operator (outside strings) */
+    if (*s == '&') {
+      /* Remove trailing whitespace before & from output buffer */
+      while (d > preprocessed && (*(d-1) == ' ' || *(d-1) == '\t'))
+        d--;
+
+      /* Skip the & itself */
+      s++;
+
+      /* Skip any following whitespace to merge tokens */
+      while (*s && (*s == ' ' || *s == '\t'))
+        s++;
+
+      /* Don't add & or whitespace to output - tokens are merged */
+      continue;
+    }
+
+    /* Regular character: copy to output */
+    *d++ = *s++;
+  }
+
+  *d = '\0';
+  return preprocessed;
+}
+
+
+/* Preprocess line to convert M80-style H-suffix hex numbers to $-prefix format
+ * M80 hex format: 0FEH, 1234H, 0ABCDH
+ * vasm hex format: $FE, $1234, $ABCD
+ *
+ * Rules:
+ * - Number must start with a digit (0-9)
+ * - Followed by hex digits (0-9, A-F, a-f)
+ * - Must end with 'H' or 'h'
+ * - H must be followed by delimiter (space, comma, operator, EOL, etc.)
+ * - H inside strings is preserved
+ *
+ * Returns preprocessed line in static buffer.
+ */
+static char *convert_hex_suffix(char *line)
+{
+  static char hexbuf[4096];
+  char *s = line;
+  char *d = hexbuf;
+  int in_string = 0;
+  char string_delim = 0;
+
+  while (*s && (d - hexbuf) < 4090) {
+    /* Track string state */
+    if ((*s == '"' || *s == '\'') && !in_string) {
+      in_string = 1;
+      string_delim = *s;
+      *d++ = *s++;
+      continue;
+    }
+    else if (in_string && *s == string_delim) {
+      in_string = 0;
+      *d++ = *s++;
+      continue;
+    }
+
+    /* Inside string: copy as-is */
+    if (in_string) {
+      *d++ = *s++;
+      continue;
+    }
+
+    /* Check for potential H-suffix hex number */
+    if (isdigit((unsigned char)*s)) {
+      char *numstart = s;
+      char hexdigits[32];
+      int hexlen = 0;
+
+      /* Collect hex digits (must start with 0-9) */
+      while (*s && hexlen < 30 &&
+             (isdigit((unsigned char)*s) ||
+              (*s >= 'A' && *s <= 'F') ||
+              (*s >= 'a' && *s <= 'f'))) {
+        hexdigits[hexlen++] = *s++;
+      }
+      hexdigits[hexlen] = '\0';
+
+      /* Check for H suffix */
+      if (hexlen > 0 && (*s == 'H' || *s == 'h')) {
+        char next = *(s+1);
+        /* H must be followed by delimiter or EOL */
+        if (next == '\0' || isspace((unsigned char)next) ||
+            next == ',' || next == ')' || next == ']' ||
+            next == '+' || next == '-' || next == '*' || next == '/' ||
+            next == '&' || next == '|' || next == '^' || next == '~' ||
+            next == '<' || next == '>' || next == '=' || next == '!' ||
+            next == ';' || iscomment(s+1)) {
+          /* Valid H-suffix hex number - convert to $-prefix */
+          *d++ = '$';
+          strcpy(d, hexdigits);
+          d += hexlen;
+          s++;  /* Skip the H */
+          continue;
+        }
+      }
+
+      /* Not a valid H-suffix number - copy as-is */
+      s = numstart;
+      *d++ = *s++;
+    }
+    else {
+      /* Regular character */
+      *d++ = *s++;
+    }
+  }
+
+  *d = '\0';
+  return hexbuf;
+}
+
+
 void parse(void)
 {
   char *s,*line,*inst,*labname;
@@ -2501,6 +2961,19 @@ void parse(void)
     if (!cur_src->macro) {
       line = convert_char_literals(line);
     }
+
+    /* Preprocess & concatenation operator (M80 compatibility) */
+    /* Apply to all lines (including macro expansions) if & is present */
+    if (strchr(line, '&') != NULL) {
+      line = preprocess_concatenation(line);
+    }
+
+    /* Preprocess M80-style H-suffix hex numbers (0FEH -> $FE) */
+    /* Check if line contains potential H-suffix hex before preprocessing */
+    if (strchr(line, 'H') != NULL || strchr(line, 'h') != NULL) {
+      line = convert_hex_suffix(line);
+    }
+
     s = line;
 
     if (!cond_state()) {
@@ -2566,6 +3039,12 @@ void parse(void)
         s = convert_dot_to_star(s);
         label = new_abs(labname,parse_expr_tmplab(&s));
       }
+      else if (!strnicmp(s,"defl",4) && isspace((unsigned char)*(s+4))) {
+        /* DEFL (M80): Define Label - allows redefinitions (same as SET) */
+        s = skip(s+4);
+        s = convert_dot_to_star(s);
+        label = new_abs(labname,parse_expr_tmplab(&s));
+      }
       else if (!strnicmp(s,"ttl",3) && isspace((unsigned char)*(s+3))) {
         s = skip(s+3);
         setfilename(labname);
@@ -2575,11 +3054,79 @@ void parse(void)
                 || *(s+5)==commentchar)) {
         /* reread original label field as macro name, no local macros */
         strbuf *buf;
+        macro *m;
+
+        /* Finalize LOCAL labels for previous macro (if any) */
+        finalize_current_macro_locals();
 
         s = line;
         if (!(buf = parse_identifier(0,&s)))
           ierror(0);
+
+        /* Track this macro for LOCAL label storage */
+        current_macro_name = mystrdup(buf->str);
         new_macro(buf->str,macro_dirlist,endm_dirlist,NULL);
+
+        /* Find the newly created macro and scan for LOCAL directives */
+        m = find_macro(buf->str,0);
+        if (m && m->text) {
+          char *p = m->text;
+          char *end = p + m->size;
+
+          /* Scan macro text for LOCAL directives */
+          while (p < end) {
+            /* Skip leading whitespace */
+            while (p < end && (*p == ' ' || *p == '\t'))
+              p++;
+
+            /* Check if this line starts with LOCAL directive */
+            if (p < end && (p + 5) <= end &&
+                (nocase ? !strnicmp(p, "local", 5) : !strncmp(p, "local", 5)) &&
+                (p + 5 >= end || !ISIDCHAR(p[5]))) {
+              /* Found LOCAL directive - parse label names */
+              char *s2 = p + 5;
+
+              /* Skip to label names */
+              while (s2 < end && (*s2 == ' ' || *s2 == '\t'))
+                s2++;
+
+              /* Parse comma-separated label list */
+              while (s2 < end && *s2 != '\n' && *s2 != '\r' && *s2 != '\0') {
+                if (ISIDSTART(*s2)) {
+                  char *label_start = s2;
+                  while (s2 < end && ISIDCHAR(*s2))
+                    s2++;
+
+                  /* Add this label to current_local_labels */
+                  if (s2 > label_start) {
+                    char *labname;
+                    int len = s2 - label_start;
+
+                    labname = mymalloc(len + 1);
+                    memcpy(labname, label_start, len);
+                    labname[len] = '\0';
+
+                    add_local_label(&current_local_labels, labname);
+
+                    myfree(labname);
+                  }
+                }
+
+                /* Skip whitespace and commas */
+                while (s2 < end && (*s2 == ' ' || *s2 == '\t' || *s2 == ','))
+                  s2++;
+              }
+            }
+
+            /* Skip to end of line */
+            while (p < end && *p != '\n' && *p != '\r')
+              p++;
+
+            /* Skip newline characters */
+            while (p < end && (*p == '\n' || *p == '\r'))
+              p++;
+          }
+        }
         continue;
       }
 #ifdef PARSE_CPU_LABEL
@@ -2600,14 +3147,14 @@ void parse(void)
           }
           else {
             /* Not a directive, treat as label */
-            label = new_labsym(0,labname);
+            label = new_labsym(0,substitute_local_label(labname));
             label->flags |= symflags;
             add_atom(0,new_label_atom(label));
           }
         }
         else {
           /* Line starts with whitespace, so definitely a label */
-          label = new_labsym(0,labname);
+          label = new_labsym(0,substitute_local_label(labname));
           label->flags |= symflags;
           add_atom(0,new_label_atom(label));
         }
@@ -2647,10 +3194,22 @@ void parse(void)
           label = new_abs(namebuf->str,parse_expr_tmplab(&s));
           continue;
         }
+        else if (!strnicmp(afterlabel,"defl",4) && isspace((unsigned char)*(afterlabel+4))) {
+          /* Label with leading whitespace followed by DEFL (M80 - same as SET) */
+          symbol *label;
+          s = skip(afterlabel+4);
+          s = convert_dot_to_star(s);
+          label = new_abs(namebuf->str,parse_expr_tmplab(&s));
+          continue;
+        }
         else if (!strnicmp(afterlabel,"macro",5) &&
                  (isspace((unsigned char)*(afterlabel+5)) || *(afterlabel+5)=='\0'
                   || *(afterlabel+5)==commentchar)) {
           /* Label with leading whitespace followed by MACRO */
+          /* Finalize LOCAL labels for previous macro (if any) */
+          finalize_current_macro_locals();
+          /* Track this macro for LOCAL label storage */
+          current_macro_name = mystrdup(namebuf->str);
           new_macro(namebuf->str,macro_dirlist,endm_dirlist,NULL);
           continue;
         }
@@ -2748,6 +3307,9 @@ void parse(void)
   }
 
   cond_check();  /* check for open conditional blocks */
+
+  /* Finalize any pending LOCAL labels from the last macro definition */
+  finalize_current_macro_locals();
 }
 
 
@@ -2797,6 +3359,32 @@ int expand_macro(source *src,char **line,char *d,int dlen)
   char *s = *line;
   char *varname;
   int varlen;
+  int in_local_directive = 0;
+
+  /* Check if we're on a LOCAL directive line by examining the source text
+     Find the start of the current line in the source */
+  if (src && src->macro && src->text) {
+    char *line_start = *line;
+    char *check;
+
+    /* Scan backwards to find start of line (after newline or at text start) */
+    while (line_start > src->text && *(line_start-1) != '\n' && *(line_start-1) != '\r')
+      line_start--;
+
+    /* Skip leading whitespace */
+    check = line_start;
+    while (*check == ' ' || *check == '\t')
+      check++;
+
+    /* Check if line starts with LOCAL directive */
+    if ((nocase ? !strnicmp(check, "local", 5) : !strncmp(check, "local", 5)) &&
+        (check[5] == ' ' || check[5] == '\t' || check[5] == '\0')) {
+      in_local_directive = 1;
+    }
+  }
+
+  /* Generate LOCAL label substitutions for this invocation (if not already done) */
+  generate_invocation_locals(src);
 
   /* Check for IRP/IRPC iteration variable first */
   if (src->irpname) {
@@ -2822,6 +3410,36 @@ int expand_macro(source *src,char **line,char *d,int dlen)
       }
       s = varname;  /* Reset if no match */
     }
+  }
+
+  /* Check if this identifier is a LOCAL label (but NOT on LOCAL directive lines) */
+  if (src->macro && !in_local_directive && ISIDSTART(*s)) {
+    char *labname = s;
+    int lablen = 0;
+    char *unique;
+
+    while (ISIDCHAR(*s)) {
+      lablen++;
+      s++;
+    }
+
+    /* Look up in current invocation's LOCAL label map */
+    unique = find_invocation_local(src, labname, lablen);
+    if (unique != NULL) {
+      int unique_len = strlen(unique);
+      /* Substitute with unique name */
+      if (dlen >= unique_len) {
+        strcpy(d, unique);
+        nc = unique_len;
+        *line = s;  /* Advance past identifier */
+        return nc;
+      }
+      else {
+        return -1;  /* Out of space */
+      }
+    }
+
+    s = labname;  /* Reset if no match */
   }
 
   /* Z80 EDTASM-M80: Use # prefix for macro parameter expansion */
@@ -2886,7 +3504,7 @@ int expand_macro(source *src,char **line,char *d,int dlen)
 
 found_irp:
   /* Substitute IRP/IRPC variable */
-  if (src->irpvals && src->irpvals->argname) {
+  if (src->irpvals && src->irpvals->argname[0]) {
     int len = strlen(src->irpvals->argname);
     if (dlen >= len) {
       memcpy(d, src->irpvals->argname, len);

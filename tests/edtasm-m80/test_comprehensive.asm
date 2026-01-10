@@ -52,8 +52,9 @@ DONE:
 
   RET
 
-; Test case 6: Data segment
-  DSEG
+; Test case 6: Data segment at 2000H to avoid overlap
+  ASEG
+  ORG 2000H
 
 BUFFER:
   DS BUFSIZE  ; Reserve 256 bytes
@@ -62,7 +63,8 @@ FLAGS:
   DEFB 0,0,0,0
 
 ; Test case 7: Back to code segment
-  CSEG
+  ASEG
+  ORG 200H
 
 UTIL:
   ; Test case 8: Case-insensitive labels
@@ -112,7 +114,7 @@ DEBUG DEFL 0
 ; - FLAGS: 4 bytes
 ; Total DSEG: 260 bytes
 ;
-; ASEG (Absolute Segment) at $8000:
+; ASEG (Absolute Segment) at 8000H:
 ; - ROM_START: "ROM" + version byte + address + conditional bytes
 ; Total ASEG: ~10 bytes
 ;
