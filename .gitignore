@@ -1,6 +1,11 @@
 # Claude
 .claude/
 
+# AI working directories (ephemeral)
+.ai/tasks/
+.ai/archive/
+# Keep .ai/repo-overrides.md tracked (project-specific config)
+
 # Build artifacts
 obj/
 *.o
