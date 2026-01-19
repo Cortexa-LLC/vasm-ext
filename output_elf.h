@@ -1,5 +1,5 @@
 /* elf.h header file for ELF objects */
-/* (c) in 2002-2016,2022 by Frank Wille */
+/* (c) in 2002-2016,2022,2026 by Frank Wille */
 
 /* e_indent indexes */
 #define EI_NIDENT  16
@@ -315,6 +315,11 @@ struct Rel64Node {
 #define ELFCPU EM_JAGRISC
 #else
 #define ELFCPU 0
+#endif
+
+/* ELF symbol visibility types may be defined by syntax module */
+#ifndef ELF_VIS
+#define ELF_VIS(s) 0
 #endif
 
 #define ELFSYMHTABSIZE 0x10000

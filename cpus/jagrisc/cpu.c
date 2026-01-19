@@ -73,7 +73,7 @@ int init_cpu(void)
 
   /* define all condition code register symbols */
   for (r=cc_regsyms; r->reg_name!=NULL; r++)
-    add_regsym(r,1);
+    add_regsym(r);
 
   return 1;
 }
@@ -120,7 +120,7 @@ static int parse_reg(char **p)
   char *s;
 
   if (s = skip_identifier(rp)) {
-    regsym *sym = find_regsym_nc(rp,s-rp);
+    regsym *sym = find_regsym(rp,s-rp);
 
     if (sym!=NULL && sym->reg_type==RTYPE_R) {
       reg = sym->reg_num;
@@ -145,7 +145,7 @@ static expr *parse_cc(char **p)
   *p = skip(*p);
 
   if (end = skip_identifier(*p)) {
-    regsym *sym = find_regsym_nc(*p,end-*p);
+    regsym *sym = find_regsym(*p,end-*p);
 
     if (sym!=NULL && sym->reg_type==RTYPE_CC) {
       *p = end;
@@ -243,7 +243,7 @@ char *parse_cpu_special(char *start)
       /* undefine a register symbol */
       s = skip(s);
       if (buf = parse_identifier(0,&s)) {
-        undef_regsym(buf->str,1,RTYPE_R);
+        undef_regsym(buf->str,RTYPE_R);
         eol(s);
         return skip_line(s);
       }
@@ -253,7 +253,7 @@ char *parse_cpu_special(char *start)
       /* undefine a condition code symbol */
       s = skip(s);
       if (buf = parse_identifier(0,&s)) {
-        undef_regsym(buf->str,1,RTYPE_CC);
+        undef_regsym(buf->str,RTYPE_CC);
         eol(s);
         return skip_line(s);
       }
@@ -282,7 +282,7 @@ int parse_cpu_label(char *labname,char **start)
       int r;
 
       if ((r = parse_reg(&s)) >= 0)
-        new_regsym(0,1,labname,RTYPE_R,0,r);
+        new_regsym(0,labname,RTYPE_R,0,r);
       else
         cpu_error(2);  /* register expected */
       eol(s);
@@ -297,7 +297,7 @@ int parse_cpu_label(char *labname,char **start)
 
       if ((ccexp = parse_cc(&s)) != NULL) {
         if (eval_expr(ccexp,&val,NULL,0))
-          new_regsym(0,1,labname,RTYPE_CC,0,(int)val);
+          new_regsym(0,labname,RTYPE_CC,0,(int)val);
         else
           general_error(30);  /* expression must be a constant */
       }

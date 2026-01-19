@@ -239,7 +239,7 @@ struct {
   "ds.b",handle_space,
 };
 
-int dir_cnt=sizeof(directives)/sizeof(directives[0]);
+static int dir_cnt=sizeof(directives)/sizeof(directives[0]);
 
 /* Handles assembly directives; returns non-zero if the line
    was a directive. */
@@ -406,12 +406,12 @@ int expand_macro(source *src,char **line,char *d,int dlen)
 
 int init_syntax(void)
 {
-  size_t i;
+  int i;
   hashdata data;
-  dirhash=new_hashtable(0x200); /*FIXME: */
+  dirhash=new_hashtable_nc(0x200);
   for(i=0;i<dir_cnt;i++){
     data.idx=i;
-    add_hashentry(dirhash,directives[i].name,data,0);
+    add_hashentry(dirhash,directives[i].name,data);
   }
   
   return 1;

@@ -49,7 +49,7 @@ static int parse_reg(char **start)
     p++;
     while (ISIDCHAR(*p))
       p++;
-    if (sym = find_regsym_nc(*start,p-*start)) {
+    if (sym = find_regsym(*start,p-*start)) {
       *start = p;
       return sym->reg_num;
     }
@@ -539,10 +539,10 @@ int init_cpu(void)
   /* define register symbols */
   for (i=0; i<8; i++) {
     sprintf(r,"r%d",i);
-    new_regsym(0,1,r,RTYPE_R,0,i);
+    new_regsym(0,r,RTYPE_R,0,i);
   }
-  new_regsym(0,1,"sp",RTYPE_R,0,6);
-  new_regsym(0,1,"pc",RTYPE_R,0,7);
+  new_regsym(0,"sp",RTYPE_R,0,6);
+  new_regsym(0,"pc",RTYPE_R,0,7);
 
   return 1;
 }

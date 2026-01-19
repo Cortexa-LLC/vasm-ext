@@ -1,5 +1,5 @@
 /* syntax.h  syntax header file for vasm */
-/* (c) in 2002-2005,2015,2017 by Volker Barthelmann and Frank Wille */
+/* (c) in 2002-2005,2015,2017,2026 by Volker Barthelmann and Frank Wille */
 
 /* macros to recognize identifiers */
 #define ISIDSTART(x) ((x)=='.'||(x)=='_'||(x)=='$'||(x)=='@'||isalpha((unsigned char)(x)))
@@ -21,6 +21,9 @@ char *chkidend(char *,char *);
 #ifndef CPU_DEF_ALIGN
 #define CPU_DEF_ALIGN 2	 /* power2-alignment is default for .align */
 #endif
+
+/* define ELF-visibility type for symbols */
+#define ELF_VIS(s) (((s)->flags>>SH_RSRVD_S)&7)
 
 /* overwrite macro defaults */
 #define MAXMACPARAMS 64

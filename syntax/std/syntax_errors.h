@@ -13,7 +13,7 @@
   "unexpected \"%s\" without \"%s\"",ERROR,
   "pointless default value for required parameter <%s>",ERROR,
   "invalid section type ignored, assuming progbits",WARNING,
-  "",ERROR,                                       /* 15 */
+  "symbol <%s> already has %s visibility",WARNING,/* 15 */
   "",ERROR,
   "",ERROR,
   "syntax error",ERROR,

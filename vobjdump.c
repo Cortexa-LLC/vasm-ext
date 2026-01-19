@@ -505,7 +505,7 @@ int main(int argc,char *argv[])
         }
         else
           fprintf(stderr,"Unable to allocate %lu bytes "
-                  "to buffer file \"%s\"!\n",vlen,argv[1]);
+                  "to buffer file \"%s\"!\n",(unsigned long)vlen,argv[1]);
       }
       fclose(f);
     }    

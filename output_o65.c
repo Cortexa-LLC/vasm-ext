@@ -355,7 +355,7 @@ static int add_import(const char *name)
     else
       importlist = last = impnode;
     data.ptr = impnode;
-    add_hashentry(importhash,name,data,0);
+    add_hashentry(importhash,name,data);
   }
   return ((struct o65Import *)data.ptr)->idx;
 }
@@ -531,7 +531,7 @@ static void o65_writeglobals(FILE *f,symbol *sym)
 
 static void write_output(FILE *f,section *sec,symbol *sym)
 {
-  importhash = new_hashtable(IMPHTABSIZE);
+  importhash = new_hashtable_c(IMPHTABSIZE);
   o65_initwrite(sec);
   o65_header(f);
   o65_writesection(f,sections[S_TEXT]);

@@ -2014,7 +2014,7 @@ struct {
 #undef P
 #undef D
 
-size_t dir_cnt = sizeof(directives) / sizeof(directives[0]);
+static int dir_cnt = sizeof(directives) / sizeof(directives[0]);
 
 
 /* checks for a valid directive, and return index when found, -1 otherwise */
@@ -2029,7 +2029,7 @@ static int check_directive(char **line)
   name = s++;
   while (ISIDCHAR(*s) || *s=='.')
     s++;
-  if (!find_namelen_nc(dirhash,name,s-name,&data))
+  if (!find_namelen(dirhash,name,s-name,&data))
     return -1;
   *line = s;
   return data.idx;
@@ -2759,7 +2759,7 @@ strbuf *get_local_label(int n,char **start)
 
 int init_syntax(void)
 {
-  size_t i;
+  int i;
   symbol *sym;
   hashdata data;
   unsigned avail;
@@ -2768,11 +2768,11 @@ int init_syntax(void)
   else if (phxass_compat) avail = DIRF_PHXASS;
   else avail = 0;
 
-  dirhash = new_hashtable(0x1800);
+  dirhash = new_hashtable_nc(0x1800);
   for (i=0; i<dir_cnt; i++) {
     if ((directives[i].flags & avail) == avail) {
       data.idx = i;
-      add_hashentry(dirhash,directives[i].name,data,1);  /* case insensitive */
+      add_hashentry(dirhash,directives[i].name,data);
     }
   }
   if (debug && dirhash->collisions)

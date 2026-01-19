@@ -41,6 +41,7 @@ typedef struct ltpool {
 /* we use OPTS atoms for cpu-specific options */
 #define HAVE_CPU_OPTS 1
 typedef struct {
+  section *this_sec;  /* because cpu_opts() is lacking a section-ptr */
   uint32_t cpu;
   int endian;
   int thumb;

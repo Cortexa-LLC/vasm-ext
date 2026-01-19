@@ -113,10 +113,10 @@ static struct varlabel *find_or_create_varlabel(const char *name, int len)
   struct varlabel *vl;
 
   if (varlabel_hash == NULL)
-    varlabel_hash = new_hashtable(MAXMACPARAMS * 16);  /* reasonable initial size */
+    varlabel_hash = new_hashtable_nc(MAXMACPARAMS * 16);  /* reasonable initial size */
 
   /* Try to find existing variable label */
-  if (find_namelen_nc(varlabel_hash, name, len, &data))
+  if (find_namelen(varlabel_hash, name, len, &data))
     return (struct varlabel *)data.ptr;
 
   /* Create new variable label entry */
@@ -126,9 +126,9 @@ static struct varlabel *find_or_create_varlabel(const char *name, int len)
   vl->pending_name = NULL;
   vl->definition_count = 0;
 
-  /* Add to hash table - use case insensitive (1) to match find_namelen_nc */
+  /* Add to hash table - case insensitive hashtable */
   data.ptr = vl;
-  add_hashentry(varlabel_hash, vl->name, data, 1);
+  add_hashentry(varlabel_hash, vl->name, data);
 
   return vl;
 }
@@ -906,12 +906,15 @@ static void handle_as(char *s)
   dblock *db;
 
   for (;;) {
+    char *opstart = s;
+    operand *op;
+
     s = skip(s);
     if (ISEOL(s))
       break;
 
-    /* Parse string with any non-whitespace delimiter */
-    if (*s && !isspace((unsigned char)*s)) {
+    /* Check if this looks like a string (starts with a delimiter character) */
+    if (*s && !isspace((unsigned char)*s) && !isxdigit((unsigned char)*s) && *s != '$') {
       char delim = *s;
       db = parse_merlin_string(&s,delim);
       if (db) {
@@ -923,9 +926,19 @@ static void handle_as(char *s)
         return;
       }
     }
+    /* Otherwise parse as numeric expression (hex, decimal, etc.) */
     else {
-      syntax_error(30);  /* missing closing delimiter for string */
-      return;
+      op = new_operand();
+      s = skip_operand(0, s);
+      if (parse_operand(opstart, s - opstart, op, DATA_OPERAND(8))) {
+        atom *a = new_datadef_atom(8, op);
+        a->align = 1;
+        add_atom(0, a);
+      }
+      else {
+        syntax_error(8);  /* invalid data operand */
+        return;
+      }
     }
 
     s = skip(s);
@@ -2966,7 +2979,7 @@ static int check_directive(char **line)
   if (s[0] == '<' && s[1] == '<' && s[2] == '<') {
     name = "em";  /* treat <<< as EM directive (handle_endm) */
     *line = s + 3;
-    if (find_name_nc(dirhash, name, &data)) {
+    if (find_name(dirhash, name, &data)) {
       return data.idx;
     }
     return -1;
@@ -2976,7 +2989,7 @@ static int check_directive(char **line)
   if (s[0] == '-' && s[1] == '-' && s[2] == '^') {
     name = "endr";  /* treat --^ as ENDR directive (handle_endr) */
     *line = s + 3;
-    if (find_name_nc(dirhash, name, &data)) {
+    if (find_name(dirhash, name, &data)) {
       return data.idx;
     }
     return -1;
@@ -3000,7 +3013,7 @@ static int check_directive(char **line)
       s++;
   }
 
-  if (!find_namelen_nc(dirhash,name,s-name,&data))
+  if (!find_namelen(dirhash,name,s-name,&data))
     return -1;
   *line = s;
   return data.idx;
@@ -4107,10 +4120,10 @@ int init_syntax(void)
   /* Merlin: Enable tolerant parsing - allow informal comments after operands */
   allow_trailing_comments = 1;
 
-  dirhash = new_hashtable(0x1000);
+  dirhash = new_hashtable_nc(0x1000);
   for (i=0; i<dir_cnt; i++) {
     data.idx = i;
-    add_hashentry(dirhash,directives[i].name,data,1);  /* case insensitive */
+    add_hashentry(dirhash,directives[i].name,data);  /* case insensitive */
   }
   if (debug && dirhash->collisions)
     fprintf(stderr,"*** %d directive collisions!!\n",dirhash->collisions);

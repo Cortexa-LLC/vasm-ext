@@ -31,7 +31,7 @@ struct ExtraDirectives {
 static hashtable *cpudirhash;
 
 
-void cpu_opts(void *opts,section *sec)
+void cpu_opts(void *opts)
 /* set cpu options for following atoms */
 {
   dpage = ((cpuopts *)opts)->dpage;
@@ -311,7 +311,7 @@ char *parse_cpu_special(char *start)
     s++;
     while (ISIDCHAR(*s))
       s++;
-    if (find_namelen_nc(cpudirhash,name,s-name,&data)) {
+    if (find_namelen(cpudirhash,name,s-name,&data)) {
       s = cpudirs[data.idx].func(skip(s));
       eol(s);
       return skip_line(s);
@@ -833,10 +833,10 @@ int init_cpu(void)
       OC_BRA = i;
   }
 
-  cpudirhash = new_hashtable(0x100);
+  cpudirhash = new_hashtable_nc(0x100);
   for (i=0; i<sizeof(cpudirs)/sizeof(cpudirs[0]); i++) {
     data.idx = i;
-    add_hashentry(cpudirhash,cpudirs[i].name,data,1);  /* case insensitive */
+    add_hashentry(cpudirhash,cpudirs[i].name,data);  /* case insensitive */
   }
   if (debug && cpudirhash->collisions)
     fprintf(stderr,"*** %d cpu directive collisions!!\n",cpudirhash->collisions);

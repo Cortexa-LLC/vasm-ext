@@ -31,9 +31,9 @@ typedef struct strbuf {
 #define MAXPADSIZE 8  /* max. pattern size to pad alignments */
 
 #include "cpu.h"
+#include "syntax.h"
 #include "symbol.h"
 #include "reloc.h"
-#include "syntax.h"
 #include "symtab.h"
 #include "expr.h"
 #include "atom.h"
@@ -245,8 +245,8 @@ int set_default_qualifiers(char **,int *);
 #endif
 #if HAVE_CPU_OPTS
 void cpu_opts_init(section *);
-void cpu_opts(void *,section *);
 void print_cpu_opts(FILE *,void *);
+void cpu_opts(void *);
 #endif
 
 /* provided by syntax.c */

@@ -108,7 +108,7 @@ static int parse_reg(char** start, int regtype)
         /*...find that identifier and return the register number it references */
         identifierLength = stringPos - *start;
 
-        if (symbol = find_regsym_nc(*start, identifierLength))
+        if (symbol = find_regsym(*start, identifierLength))
         {
             if (symbol->reg_type == regtype)
             {
@@ -462,9 +462,9 @@ int init_cpu()
     for (i = 0; i < 32; i++)
     {
         sprintf(r, "r%d", i);
-        new_regsym(0, 1, r, RTYPE_R, 0, i);
+        new_regsym(0, r, RTYPE_R, 0, i);
         r[0] = 'f';
-        new_regsym(0, 1, r, RTYPE_F, 0, i);
+        new_regsym(0, r, RTYPE_F, 0, i);
     }
 
     return 1;

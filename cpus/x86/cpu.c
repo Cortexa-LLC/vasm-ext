@@ -67,7 +67,7 @@ static const int scale_factor_tab[4] = { 1, 2, 4, 8 };
 
 
 
-void cpu_opts(void *opts,section *sec)
+void cpu_opts(void *opts)
 /* set cpu options for following atoms */
 {
   mode_flag = ((cpuopts *)opts)->mode;
@@ -1497,7 +1497,7 @@ char *parse_instruction(char *s,int *inst_len,char **ext,int *ext_len,
       s++;
     len = s - inst;
 
-    if (find_namelen_nc(mnemohash,inst,len,&data)) {
+    if (find_namelen(mnemohash,inst,len,&data)) {
 #if 0  /*@@@ need a way to support prefixes at the same line with vasm */
       mnemonic *mnemo = &mnemonics[data.idx];
 
@@ -1538,7 +1538,7 @@ char *parse_instruction(char *s,int *inst_len,char **ext,int *ext_len,
         char x = *(s-1);
 
         if ((x=='b' || x=='w' || x=='l' || x=='s' || x=='q' || x=='x') &&
-            find_namelen_nc(mnemohash,inst,len-1,&data)) {
+            find_namelen(mnemohash,inst,len-1,&data)) {
           if ((mnemonics[data.idx].ext.opcode_modifier&NOSUF) != NOSUF) {
             /* a potential suffix found, save it */
             int cnt = *ext_cnt;
@@ -1590,7 +1590,7 @@ static regsym *parse_reg(char **pp)
         if (isdigit((unsigned char)*(p+1)) && *(p+2)==')')
           p += 3;
       }
-      if (r = find_regsym_nc(start,p-start)) {
+      if (r = find_regsym(start,p-start)) {
         if ((r->reg_flags & (RegRex64|RegRex)) && mode_flag!=CODE_64BIT)
           return NULL;
         *pp = p;
@@ -1948,7 +1948,7 @@ int init_cpu(void)
 
   /* define all register symbols */
   for (r=x86_regsyms; r->reg_name!=NULL; r++)
-    add_regsym(r,1);  /* case insensitive */
+    add_regsym(r);
 
   return 1;
 }

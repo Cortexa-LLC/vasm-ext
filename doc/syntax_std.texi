@@ -3,7 +3,7 @@ with the extension @code{std}.
 
 @section Legal
 
-    This module is written in 2002-2024 by Volker Barthelmann and
+    This module is written in 2002-2026 by Volker Barthelmann and
     is covered by the vasm copyright without modifications.
 
 @section Additional options for this module
@@ -108,13 +108,13 @@ See @code{.string}.
       third argument defines a maximum number of padding bytes to use. When
       more are needed then the alignment is not done at all.
 
-@item .balignl <bit_count>[,<fill>][,<maxpad>]
+@item .balignl <byte_count>[,<fill>][,<maxpad>]
       Works like @code{.balign}, with the only difference that the optional
       fill value can be specified as a 32-bit word. Padding locations which
       are not already 32-bit aligned, will cause a warning and padded by
       zero-bytes.
 
-@item .balignw <bit_count>[,<fill>][,<maxpad>]
+@item .balignw <byte_count>[,<fill>][,<maxpad>]
       Works like @code{.balign}, with the only difference that the optional
       fill value can be specified as a 16-bit word. Padding locations which
       are not already 16-bit aligned, will cause a warning and padded by
@@ -196,6 +196,11 @@ See @code{.string}.
       Assign the values of the operands into successive 16-bit words of
       memory in the current section using the backend's endianness.
 
+@item .hidden <symbol>[,<symbol>...]
+      Overrides the symbol's ELF default visibility and sets it to "hidden",
+      which means the symbols are not visible to other components.
+      The default visibility is otherwise defined by the symbol's binding.
+
 @item .if <expression>
       Conditionally assemble the following lines if <expression> is non-zero.
 
@@ -267,6 +272,13 @@ See @code{.string}.
       Assign the values of the operands into successive words of
       memory in the current section using the target's endianness and
       address size.
+
+@item .internal <symbol>[,<symbol>...]
+      Overrides the symbol's ELF default visibility and sets it to "internal",
+      which means the symbols are considered to be hidden (not visible to
+      other components), and that some extra, processor specific processing
+      must be performed.
+      The default visibility is otherwise defined by the symbol's binding.
 
 @item .irp <symbol>[,<val>...]
       Iterates the block between @code{.irp} and @code{.endr} for each
@@ -351,6 +363,14 @@ See @code{.string}.
 @item .popsection
       Restore the top section from the internal section-stack.
       Also refer to @code{.pushsection}.
+
+@item .protcted <symbol>[,<symbol>...]
+      Overrides the symbol's ELF default visibility and sets it to "protected",
+      which means that any references to the symbols from within the
+      components that defines them must be resolved to the definition in
+      that component, even if a definition in another component would
+      normally preempt this.
+      The default visibility is otherwise defined by the symbol's binding.
 
 @item .pushsection <name>[,"<attributes>"][[,@@<type>]|[,%<type>]|[,<mem_flags>]]
       Works exactly like @code{.section}, but additionally pushes

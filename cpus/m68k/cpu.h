@@ -439,6 +439,7 @@ struct cpu_models {
 /* register symbols */
 #define HAVE_REGSYMS
 #define REGSYMHTSIZE 256
+#define NOCASE_REGSYMS 0
 
 #define RSTYPE_Dn   0
 #define RSTYPE_An   1

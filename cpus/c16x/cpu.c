@@ -688,7 +688,7 @@ int init_cpu(void)
     if(!strcmp(mnemonics[i].name,"jnbs"))
       JNBS=i;
   }
-  sfrhash=new_hashtable(SFRHTSIZE);
+  sfrhash=new_hashtable_sc(SFRHTSIZE);
   return 1;
 }
 
@@ -731,7 +731,7 @@ char *parse_cpu_special(char *s)
 	new=data.ptr;
       else{
 	data.ptr=new=mymalloc(sizeof(*new));
-	add_hashentry(sfrhash,cnvstr(name,s-name),data,0);
+	add_hashentry(sfrhash,cnvstr(name,s-name),data);
 	new->next=first_sfr;
 	first_sfr=new;
       }

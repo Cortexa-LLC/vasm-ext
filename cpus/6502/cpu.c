@@ -40,7 +40,7 @@ struct ExtraDirectives {
 static hashtable *cpudirhash;
 
 
-void cpu_opts(void *opts,section *sec)
+void cpu_opts(void *opts)
 /* set cpu options for following atoms */
 {
   dpage = ((cpuopts *)opts)->dpage;
@@ -473,7 +473,7 @@ char *parse_cpu_special(char *start)
     s++;
     while (ISIDCHAR(*s))
       s++;
-    if (find_namelen_nc(cpudirhash,name,s-name,&data)) {
+    if (find_namelen(cpudirhash,name,s-name,&data)) {
       if (cpu_type & cpudirs[data.idx].avail) {
         s = cpudirs[data.idx].func(skip(s));
         eol(s);
@@ -976,7 +976,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
           case INDIRX:
           case LINDIR:
           case REL16:
-	  case IMMED16:
+          case IMMED16:
             d = setval(0,d,2,val);
             break;
           case LABS:
@@ -985,9 +985,9 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
             break;
           case QDPIND:
           case QDPINDZ:
-	    *d = d[-1];
-	    d[-1] = 0xea;  /* MEGA65 32-bit indirect prefix */
-	    d++;
+            *d = d[-1];
+            d[-1] = 0xea;  /* MEGA65 32-bit indirect prefix */
+            d++;
           case DPAGE:
           case DPAGEX:
           case DPAGEY:
@@ -1181,10 +1181,10 @@ int init_cpu(void)
     }
   }
 
-  cpudirhash = new_hashtable(0x100);
+  cpudirhash = new_hashtable_nc(0x100);
   for (i=0; i<sizeof(cpudirs)/sizeof(cpudirs[0]); i++) {
     data.idx = i;
-    add_hashentry(cpudirhash,cpudirs[i].name,data,1);  /* case insensitive */
+    add_hashentry(cpudirhash,cpudirs[i].name,data);
   }
   if (debug && cpudirhash->collisions)
     fprintf(stderr,"*** %d cpu directive collisions!!\n",cpudirhash->collisions);

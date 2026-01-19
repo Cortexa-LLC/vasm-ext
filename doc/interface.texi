@@ -637,6 +637,7 @@ Example:
 @example
 #define HAVE_REGSYMS
 #define REGSYMHTSIZE 256
+#define NOCASE_REGSYMS 0  /* default is 1 */
 @end example
 
 A register symbol is defined by an object of type @code{regsym}
@@ -1246,10 +1247,49 @@ Useful support functions for writing CPU-, Syntax- and Output-modules.
   A non-zero @code{redef} allows redefinition of a register symbol without
   error message. A non-zero @code{no_case} defines that the case of the
   symbol name is ignored.
-@item regsym *find_regsym(const char *name,int len)
+@item regsym *find_regsym(const char *name,int len,int no_case)
   Find register symbol with @code{name} and @code{len} characters.
+  A non-zero @code{no_case} ignores the symbol name's case.
+@item regsym *find_regsym_c(const char *name,int len)
+  Find register symbol with case-sensitive @code{name} and @code{len} characters.
 @item regsym *find_regsym_nc(const char *name,int len)
   Like above, but ignores the case of the symbol.
+@end table
+
+@subsection Hash Tables
+Modules may create hash tables for their own purpose with any size or
+case-sensitivity. Hash table entries have the type @code{hashdata}, which
+is a union with currently at least the following choices:
+@example
+typedef union hashdata @{
+  void *ptr;
+  unsigned idx;
+@} hashdata;
+@end example
+
+@table @code
+@item hashtable *new_hashtable(size_t sz, int nocase)
+  Create a new hash table with @code{sz} entries. The @code{nocase} parameter defines whether
+  names will be handled case-sensitive (@code{nocase==0}) or case-insensitive
+  (@code{nocase==1}).
+@item hashtable *new_hashtable_c(size_t sz)
+  Create a new hash table with @code{sz} case-sensitive entries.
+@item hashtable *new_hashtable_nc(size_t sz)
+  Create a new hash table with @code{sz} case-insensitive entries.
+@item hashtable *new_hashtable_sc(size_t sz)
+  Create a new hash table with @code{sz} entries with the system default case-sensitivity.
+
+@item void add_hashentry(hashtable *ht,const char *name,hashdata d)
+  Make a hash table entry with @code{d} for the given @code{name}.
+@item void rem_hashentry(hashtable *ht,const char *name)
+  Remove the entry for @code{name} from the given hash table.
+@item int find_name(hashtable *ht,const char *name,hashdata *d)
+  Find @code{name} in the given hash table and return its hashdata in
+  @code{d}. The return code is zero when @code{name} doesn't exist.
+@item int find_namelen(hashtable *ht,const char *name,int len,hashdata *d)
+  Find an entry which matches the string at @code{name} with @code{len}
+  characters in the given hash table and return its hashdata in @code{d}.
+  The return code is zero when @code{name} doesn't exist.
 @end table
 
 @subsection Atoms

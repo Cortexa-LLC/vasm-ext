@@ -108,7 +108,7 @@ void add_symbol(symbol *p)
   p->next = first_symbol;
   first_symbol = p;
   data.ptr = p;
-  add_hashentry(symhash,p->name,data,nocase);
+  add_hashentry(symhash,p->name,data);
 }
 
 
@@ -130,7 +130,7 @@ void rem_symbol(symbol *symp)
     first_symbol = symp->next;
 
   /* remove from hash table and deallocate */
-  rem_hashentry(symhash,symp->name,nocase);
+  rem_hashentry(symhash,symp->name);
   myfree((void *)symp->name);
   myfree(symp);
 }
@@ -140,14 +140,8 @@ symbol *find_symbol(const char *name)
 {
   hashdata data;
 
-  if (nocase) {
-    if (!find_name_nc(symhash,name,&data))
-      return 0;
-  }
-  else {
-    if (!find_name(symhash,name,&data))
-      return 0;
-  }
+  if (!find_name(symhash,name,&data))
+    return 0;
   return data.ptr;
 }
 
@@ -157,7 +151,7 @@ void refer_symbol(symbol *sym,const char *refname)
 {
   hashdata data;
   data.ptr = sym;
-  add_hashentry(symhash,refname,data,nocase);
+  add_hashentry(symhash,refname,data);
 }
 
 
@@ -186,7 +180,7 @@ void restore_symbols(void)
           lastprot = symp;
       }
       else {
-        rem_hashentry(symhash,symp->name,nocase);
+        rem_hashentry(symhash,symp->name);
         myfree((void *)symp->name);
         myfree(symp);
       }
@@ -339,10 +333,10 @@ symbol *new_labsym(section *sec,const char *name)
   if (chklabels) {
     hashdata data;
 
-    if (find_name_nc(mnemohash,name,&data))
+    if (find_name(mnemohash,name,&data))
       general_error(39);  /* name conflicts with mnemonic */
-    else if ((dotdirs&&*name=='.'&&find_name_nc(dirhash,name+1,&data)) ||
-             (!dotdirs&&find_name_nc(dirhash,name,&data)))
+    else if ((dotdirs&&*name=='.'&&find_name(dirhash,name+1,&data)) ||
+             (!dotdirs&&find_name(dirhash,name,&data)))
       general_error(40);  /* name conflicts with directive */
   }
 
@@ -455,12 +449,17 @@ expr *set_internal_abs(const char *name,taddr newval)
 
 
 #ifdef HAVE_REGSYMS
-void add_regsym(regsym *rsym,int no_case)
+
+#ifndef NOCASE_REGSYMS
+#define NOCASE_REGSYMS 1
+#endif
+
+void add_regsym(regsym *rsym)
 {
   hashdata data;
 
   data.ptr = rsym;
-  add_hashentry(regsymhash,rsym->reg_name,data,no_case);
+  add_hashentry(regsymhash,rsym->reg_name,data);
 }
 
 
@@ -474,24 +473,14 @@ regsym *find_regsym(const char *name,int len)
 }
 
 
-regsym *find_regsym_nc(const char *name,int len)
-{
-  hashdata data;
-
-  if (find_namelen_nc(regsymhash,name,len,&data))
-    return data.ptr;
-  return NULL;
-}
-
-
-regsym *new_regsym(int redef,int no_case,const char *name,int type,
+regsym *new_regsym(int redef,const char *name,int type,
                    unsigned int flags,unsigned int num)
 {
   int len = strlen(name);
   regsym *rsym;
 
   /* check if register symbol already exists */
-  rsym = no_case!=0 ? find_regsym_nc(name,len) : find_regsym(name,len);
+  rsym = find_regsym(name,len);
   if (rsym!=NULL && !redef) {
     general_error(58,name);  /* register symbol redefined */
     return rsym;
@@ -503,7 +492,7 @@ regsym *new_regsym(int redef,int no_case,const char *name,int type,
     rsym->reg_type = type;
     rsym->reg_flags = flags;
     rsym->reg_num = num;
-    add_regsym(rsym,no_case);
+    add_regsym(rsym);
   }
   else {
     /* just update */
@@ -517,15 +506,13 @@ regsym *new_regsym(int redef,int no_case,const char *name,int type,
 
 
 /* remove an already defined register symbol from the hash table */
-int undef_regsym(const char *name,int no_case,int type)
+int undef_regsym(const char *name,int type)
 {
-  regsym *rsym = no_case!=0 ?
-                 find_regsym_nc(name,strlen(name)) :
-                 find_regsym(name,strlen(name));
+  regsym *rsym = find_regsym(name,strlen(name));
 
   if (rsym != NULL) {
     if (rsym->reg_type == type) {
-      rem_hashentry(regsymhash,name,no_case);
+      rem_hashentry(regsymhash,name);
       return 1;
     }
     else
@@ -542,11 +529,33 @@ int undef_regsym(const char *name,int no_case,int type)
 
 int init_symbol(void)
 {
-  symhash = new_hashtable(SYMHTABSIZE);
+  symhash = new_hashtable_sc(SYMHTABSIZE);
 #ifdef HAVE_REGSYMS
-  regsymhash = new_hashtable(REGSYMHTSIZE);
+  regsymhash = new_hashtable(REGSYMHTSIZE,NOCASE_REGSYMS);
 #endif
   return 1;
+}
+
+
+void reinit_symhash(void)
+/* Reinitialize symbol hashtable after nocase flag may have changed */
+{
+  hashtable *oldhash;
+  symbol *sym;
+  hashdata data;
+
+  /* Save old hashtable and create new one with current nocase setting */
+  oldhash = symhash;
+  symhash = new_hashtable_sc(SYMHTABSIZE);
+
+  /* Migrate all existing symbols to new hashtable */
+  for (sym = first_symbol; sym != NULL; sym = sym->next) {
+    data.ptr = sym;
+    add_hashentry(symhash, sym->name, data);
+  }
+
+  /* Note: We don't free the old hashtable structure as it may still
+     have references, but this is a one-time initialization cost */
 }
 
 

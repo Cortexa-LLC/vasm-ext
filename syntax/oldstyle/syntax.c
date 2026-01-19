@@ -1342,7 +1342,7 @@ struct {
   "space",handle_listspace
 };
 
-int dir_cnt = sizeof(directives) / sizeof(directives[0]);
+static int dir_cnt = sizeof(directives) / sizeof(directives[0]);
 
 
 /* checks for a valid directive, and return index when found, -1 otherwise */
@@ -1359,7 +1359,7 @@ static int check_directive(char **line)
     s++;
   if (*name=='.' && dotdirs)
     name++;
-  if (!find_namelen_nc(dirhash,name,s-name,&data))
+  if (!find_namelen(dirhash,name,s-name,&data))
     return -1;
   *line = s;
   return data.idx;
@@ -2132,13 +2132,13 @@ strbuf *get_local_label(int n,char **start)
 
 int init_syntax(void)
 {
-  size_t i;
+  int i;
   hashdata data;
 
-  dirhash = new_hashtable(0x1000);
+  dirhash = new_hashtable_nc(0x1000);
   for (i=0; i<dir_cnt; i++) {
     data.idx = i;
-    add_hashentry(dirhash,directives[i].name,data,1);  /* case insensitive */
+    add_hashentry(dirhash,directives[i].name,data);
   }
   if (debug && dirhash->collisions)
     fprintf(stderr,"*** %d directive collisions!!\n",dirhash->collisions);

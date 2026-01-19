@@ -25,7 +25,7 @@ instruction *new_inst(const char *inst,int len,
   memset(ops,0,sizeof(ops));
 #endif
 
-  if (find_namelen_nc(mnemohash,inst,len,&data)) {
+  if (find_namelen(mnemohash,inst,len,&data)) {
     i = data.idx;
 
     /* try all mnemonics with the same name until operands match */

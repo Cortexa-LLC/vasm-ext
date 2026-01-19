@@ -1,5 +1,5 @@
 /* aout.h header file for a.out objects */
-/* (c) in 2008,2020 by Frank Wille */
+/* (c) in 2008,2020,2026 by Frank Wille */
 
 #include "stabs.h"
 
@@ -88,29 +88,27 @@ struct relocation_info {
 #define ASYMTABSIZE 0x10000
 
 struct StrTabNode {
-  struct node n;
-  struct StrTabNode *hashchain;
+  struct StrTabNode *next;
   const char *str;
   uint32_t offset;
 };
 
 struct StrTabList {
-  struct list l;
-  struct StrTabNode **hashtab;
+  struct StrTabNode *first,*last;
+  hashtable *hashtab;
   uint32_t nextoffset;
 };
 
 struct SymbolNode {
-  struct node n;
-  struct SymbolNode *hashchain;
+  struct SymbolNode *next;
   const char *name;
   struct nlist32 s;
   uint32_t index;
 };
 
 struct SymTabList {
-  struct list l;
-  struct SymbolNode **hashtab;
+  struct SymbolNode *first,*last;
+  hashtable *hashtab;
   uint32_t nextindex;
 };
 

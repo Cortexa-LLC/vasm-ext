@@ -289,7 +289,7 @@ static int resolve_section(section *sec)
         cur_src->line=p->line;
 #if HAVE_CPU_OPTS
       if(p->type==OPTS){
-        cpu_opts(p->content.opts,sec);
+        cpu_opts(p->content.opts);
       }
       else
 #endif
@@ -492,7 +492,7 @@ static void assemble(void)
         roffs_to_space(sec,p);
 #if HAVE_CPU_OPTS
       else if(p->type==OPTS)
-        cpu_opts(p->content.opts,sec);
+        cpu_opts(p->content.opts);
 #endif
       else if(p->type==PRINTTEXT&&!nostdout)
         printf("%s",p->content.ptext);
@@ -710,12 +710,12 @@ static int init_main(void)
   int i;
   const char *mname;
   hashdata data;
-  mnemohash=new_hashtable(MNEMOHTABSIZE);
+  mnemohash=new_hashtable_nc(MNEMOHTABSIZE);
   i=0;
   while(i<mnemonic_cnt){
     data.idx=i;
     mname=mnemonics[i++].name;
-    add_hashentry(mnemohash,mname,data,1);  /* always case-insensitive */
+    add_hashentry(mnemohash,mname,data);
     while(i<mnemonic_cnt&&!strcmp(mname,mnemonics[i].name))
       mnemonics[i++].name=mname;  /* make sure the pointer is the same */
   }
@@ -1219,8 +1219,14 @@ int main(int argc,char **argv)
       debug=1;
       argv[i][0]=0;
     }
+    if(!strcmp("-nocase",argv[i])){
+      nocase=1;
+      argv[i][0]=0;
+      continue;
+    }
     if(!strcmp("-v",argv[i]))
       verbose=2;
+
   }
   vasmname=cnvstr(copyright,strchr(copyright,'(')-copyright-1);
   if(!init_output(output_format))
@@ -1353,10 +1359,6 @@ int main(int argc,char **argv)
       msource_disable = 1;
       continue;
     }
-    if(!strcmp("-nocase",argv[i])){
-      nocase=1;
-      continue;
-    }
     if(!strcmp("-relpath",argv[i])){
       relpath=1;
       continue;
@@ -1470,12 +1472,13 @@ int main(int argc,char **argv)
   nostdout=depend&&dep_filename==NULL; /* dependencies to stdout nothing else */
   include_main_source();
   internal_abs(vasmsym_name);
-  if(!init_parse())
-    general_error(10,"parse");
   if(!init_syntax())
     general_error(10,"syntax");
+  reinit_symhash();  /* Reinitialize symbol hash with correct nocase setting */
   if(!init_cpu())
     general_error(10,"cpu");
+  if(!init_parse())
+    general_error(10,"parse");
   set_taddr();  /* update taddr mask/min/max */
   set_defaults();
   if(!init_expr())

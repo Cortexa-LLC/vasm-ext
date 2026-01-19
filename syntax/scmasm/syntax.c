@@ -46,16 +46,16 @@ static struct namelen endr_dirlist[] = {
   { 4,&endrname[1] }, { 6,&endrname[1] }, { 9,&endrname[1] }, { 4,"endu" }, { 0,0 }
 };
 static struct namelen dmacro_dirlist[] = {
-  { 3,&macroname[0] }, { 0,0 }  /* .ma */
+  { 2,&macroname[1] }, { 0,0 }  /* ma (dot skipped by parse.c) */
 };
 static struct namelen dendm_dirlist[] = {
-  { 3,&endmname[0] }, { 5,".endm" }, { 7,".endmac" }, { 9,".endmacro" }, { 0,0 }
+  { 2,&endmname[1] }, { 4,"endm" }, { 6,"endmac" }, { 8,"endmacro" }, { 0,0 }
 };
 static struct namelen drept_dirlist[] = {
-  { 5,&reptname[0] }, { 7,&repeatname[0] }, { 3,".lu" }, { 0,0 }
+  { 4,&reptname[1] }, { 6,&repeatname[1] }, { 2,"lu" }, { 0,0 }
 };
 static struct namelen dendr_dirlist[] = {
-  { 5,&endrname[0] }, { 7,&endrname[0] }, { 10,&endrname[0] }, { 5,".endu" }, { 0,0 }
+  { 4,&endrname[1] }, { 6,&endrname[1] }, { 9,&endrname[1] }, { 4,"endu" }, { 0,0 }
 };
 
 static char local_modif_name[] = "_";  /* ._ for abyte directive */
@@ -2516,7 +2516,7 @@ static int check_directive(char **line)
       s++;
   }
 
-  if (!find_namelen_nc(dirhash,name,s-name,&data))
+  if (!find_namelen(dirhash,name,s-name,&data))
     return -1;
   *line = s;
   return data.idx;
@@ -3705,10 +3705,10 @@ int init_syntax(void)
   /* SCASM: Disable C-style octal prefix (leading 0 does NOT mean octal) */
   nocprefix = 1;
 
-  dirhash = new_hashtable(0x1000);
+  dirhash = new_hashtable_nc(0x1000);
   for (i=0; i<dir_cnt; i++) {
     data.idx = i;
-    add_hashentry(dirhash,directives[i].name,data,1);  /* case insensitive */
+    add_hashentry(dirhash,directives[i].name,data);  /* case insensitive */
   }
   if (debug && dirhash->collisions)
     fprintf(stderr,"*** %d directive collisions!!\n",dirhash->collisions);

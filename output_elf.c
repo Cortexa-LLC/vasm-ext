@@ -1,11 +1,11 @@
 /* elf.c ELF output driver for vasm */
-/* (c) in 2002-2016,2020,2022 by Frank Wille */
+/* (c) in 2002-2016,2020,2022,2026 by Frank Wille */
 
 #include "vasm.h"
 #include "output_elf.h"
 #include "stabs.h"
 #if ELFCPU && defined(OUTELF)
-static char *copyright="vasm ELF output module 2.7b (c) 2002-2016,2020,2022 Frank Wille";
+static char *copyright="vasm ELF output module 2.7c (c) 2002-2016,2020,2022,2026 Frank Wille";
 
 static int keep_empty_sects;
 
@@ -37,7 +37,7 @@ static unsigned addString(struct StrTabList *sl,const char *s)
 
 static void init_lists(void)
 {
-  elfsymhash = new_hashtable(ELFSYMHTABSIZE);
+  elfsymhash = new_hashtable_c(ELFSYMHTABSIZE);
   initlist(&shdrlist);
   initlist(&symlist);
   initlist(&relalist);
@@ -89,7 +89,7 @@ static struct Symbol32Node *addSymbol32(const char *name)
   }
   data.ptr = sn;
   sn->idx = symindex++;
-  add_hashentry(elfsymhash,name?name:emptystr,data,0);
+  add_hashentry(elfsymhash,name?name:emptystr,data);
   return sn;
 }
 
@@ -106,31 +106,33 @@ static struct Symbol64Node *addSymbol64(const char *name)
   }
   data.ptr = sn;
   sn->idx = symindex++;
-  add_hashentry(elfsymhash,name?name:emptystr,data,0);
+  add_hashentry(elfsymhash,name?name:emptystr,data);
   return sn;
 }
 
 
 static void newSym32(const char *name,elfull value,elfull size,uint8_t bind,
-                     uint8_t type,unsigned shndx)
+                     uint8_t vis,uint8_t type,unsigned shndx)
 {
   struct Symbol32Node *elfsym = addSymbol32(name);
 
   setval(be,elfsym->s.st_value,4,value);
   setval(be,elfsym->s.st_size,4,size);
   elfsym->s.st_info[0] = ELF32_ST_INFO(bind,type);
+  elfsym->s.st_other[0] = vis;
   setval(be,elfsym->s.st_shndx,2,shndx);
 }
 
 
 static void newSym64(const char *name,elfull value,elfull size,uint8_t bind,
-                     uint8_t type,unsigned shndx)
+                     uint8_t vis,uint8_t type,unsigned shndx)
 {
   struct Symbol64Node *elfsym = addSymbol64(name);
 
   setval(be,elfsym->s.st_value,8,value);
   setval(be,elfsym->s.st_size,8,size);
   elfsym->s.st_info[0] = ELF64_ST_INFO(bind,type);
+  elfsym->s.st_other[0] = vis;
   setval(be,elfsym->s.st_shndx,2,shndx);
 }
 
@@ -356,7 +358,7 @@ static utaddr get_reloc_type(atom *a,rlist **rl,
 
 static utaddr make_relocs(atom *a,rlist *rl,utaddr pc,
                           void (*newsym)(const char *,elfull,elfull,uint8_t,
-                                         uint8_t,unsigned),
+                                         uint8_t,uint8_t,unsigned),
                           void (*addrel)(elfull,elfull,elfull,elfull))
 /* convert all of an atom's relocations into ELF32/ELF64 relocs */
 {
@@ -383,7 +385,7 @@ static utaddr make_relocs(atom *a,rlist *rl,utaddr pc,
           if (idx == 0) {
             /* create a new symbol, which can be referenced */
             idx = symindex;
-            newsym(refsym->name,0,0,STB_GLOBAL,STT_NOTYPE,0);
+            newsym(refsym->name,0,0,STB_GLOBAL,0,STT_NOTYPE,0);
           }
           addrel(pc+offset,addend,idx,rtype);
           ro += elfrelsize;
@@ -401,7 +403,7 @@ static utaddr make_relocs(atom *a,rlist *rl,utaddr pc,
 
 static utaddr make_stabreloc(utaddr pc,struct stabdef *nlist,
                              void (*newsym)(const char *,elfull,elfull,uint8_t,
-                                            uint8_t,unsigned),
+                                            uint8_t,uint8_t,unsigned),
                              void (*addrel)(elfull,elfull,elfull,elfull))
 {
   rlist dummyrl;
@@ -445,7 +447,7 @@ static utaddr prog_sec_hdrs(section *sec,utaddr soffset,
                             void *(*makeshdr)(elfull,elfull,elfull,elfull,
                                               elfull,elfull,elfull,elfull),
                             void (*newsym)(const char *,elfull,elfull,
-                                           uint8_t,uint8_t,
+                                           uint8_t,uint8_t,uint8_t,
                                            unsigned))
 {
   section *secp;
@@ -458,7 +460,7 @@ static utaddr prog_sec_hdrs(section *sec,utaddr soffset,
       uint32_t type = elf_sec_type(secp);
 
       /* add section base symbol */
-      newsym(NULL,0,0,STB_LOCAL,STT_SECTION,shdrindex);
+      newsym(NULL,0,0,STB_LOCAL,0,STT_SECTION,shdrindex);
 
       secp->idx = shdrindex;
       makeshdr(addString(&shstrlist,secp->name),
@@ -513,7 +515,7 @@ static utaddr prog_sec_hdrs(section *sec,utaddr soffset,
 
 static unsigned build_symbol_table(symbol *first,
                                    void (*newsym)(const char *,elfull,elfull,
-                                                  uint8_t,uint8_t,
+                                                  uint8_t,uint8_t,uint8_t,
                                                   unsigned))
 {
   symbol *symp;
@@ -521,14 +523,14 @@ static unsigned build_symbol_table(symbol *first,
 
   /* file name symbol, when defined */
   if (filename)
-    newsym(filename,0,0,STB_LOCAL,STT_FILE,SHN_ABS);
+    newsym(filename,0,0,STB_LOCAL,0,STT_FILE,SHN_ABS);
 
   if (!no_symbols)  /* symbols with local binding first */
     for (symp=first; symp; symp=symp->next)
       if (*symp->name!='.' && *symp->name!=' ' && !(symp->flags&VASMINTERN))
         if (symp->type!=IMPORT && !(symp->flags & (EXPORT|WEAK)))
           newsym(symp->name,get_sym_value(symp),get_sym_size(symp),
-                 STB_LOCAL,get_sym_info(symp),get_sym_index(symp));
+                 STB_LOCAL,ELF_VIS(symp),get_sym_info(symp),get_sym_index(symp));
 
   firstglobal = symindex;  /* now the global and weak symbols */
 
@@ -538,7 +540,7 @@ static unsigned build_symbol_table(symbol *first,
           (symp->type==IMPORT && (symp->flags & (COMMON|WEAK))))
         newsym(symp->name,get_sym_value(symp),get_sym_size(symp),
                (symp->flags & WEAK) ? STB_WEAK : STB_GLOBAL,
-               get_sym_info(symp),get_sym_index(symp));
+               ELF_VIS(symp),get_sym_info(symp),get_sym_index(symp));
 
   return firstglobal;
 }
@@ -546,7 +548,7 @@ static unsigned build_symbol_table(symbol *first,
 
 static void make_reloc_sections(section *sec,
                                 void (*newsym)(const char *,elfull,elfull,
-                                               uint8_t,uint8_t,
+                                               uint8_t,uint8_t,uint8_t,
                                                unsigned),
                                 void (*addrel)(elfull,elfull,elfull,elfull),
                                 void *(*makeshdr)(elfull,elfull,elfull,elfull,

@@ -11,6 +11,8 @@ o ARM: Support for automatic literal pools, when using the '=' operand-prefix
   Literal pools are dumped with the ltorg directive, or automatically at
   the end of any section.
 o ARM: Alternatively permit an SWI immediate operand with '#'.
+o std-syntax: ELF visibility types: .hidden, .internal, .protected.
+o elf-output: Support for visibility types.
 o tos-output: Alignments > 32 bit in data or bss could lead to corrupt output.
 o xfile-output: Alignments > 32 bit in data or bss could lead to corrupt
   output.

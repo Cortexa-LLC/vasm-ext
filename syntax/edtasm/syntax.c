@@ -2100,7 +2100,7 @@ static int check_directive(char **line)
   name = s++;
   while (ISIDCHAR(*s) || *s=='.')
     s++;
-  if (!find_namelen_nc(dirhash,name,s-name,&data))
+  if (!find_namelen(dirhash,name,s-name,&data))
     return -1;
   *line = s;
   return data.idx;
@@ -2715,7 +2715,7 @@ strbuf *get_local_label(int n,char **start)
   if (p!=NULL && *p=='\\' && ISIDSTART(*s) && *s!=local_char && *(p-1)!='$') {
     /* skip local part of global\local label */
     s = p + 1;
-    if (p = skip_local(s)) {
+    if ((p = skip_local(s))) {
       name = make_local_label(n,*start,(s-1)-*start,s,p-s);
       *start = skip(p);
     }
@@ -2747,10 +2747,10 @@ int init_syntax(void)
   /* Note: nocase is set via syntax_args() or defaults to 0 (case-sensitive)
      Use -nocase flag to enable case-insensitive mode per EDTASM+ spec */
 
-  dirhash = new_hashtable(0x1800);
+  dirhash = new_hashtable_nc(0x1800);
   for (i=0; i<dir_cnt; i++) {
     data.idx = i;
-    add_hashentry(dirhash,directives[i].name,data,1);  /* directives always case-insensitive */
+    add_hashentry(dirhash,directives[i].name,data);  /* directives always case-insensitive */
   }
   if (debug && dirhash->collisions)
     fprintf(stderr,"*** %d directive collisions!!\n",dirhash->collisions);

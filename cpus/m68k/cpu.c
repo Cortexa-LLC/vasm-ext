@@ -369,8 +369,8 @@ static void check_apollo_conflicts(void)
        to make sure that "load" is disabled as a directive. */
     hashdata data;
 
-    if (find_name_nc(dirhash,mnemonics[OC_LOAD].name,&data)) {
-      rem_hashentry(dirhash,mnemonics[OC_LOAD].name,nocase);
+    if (find_name(dirhash,mnemonics[OC_LOAD].name,&data)) {
+      rem_hashentry(dirhash,mnemonics[OC_LOAD].name);
       /*cpu_error(63,mnemonics[OC_LOAD].name);*/
     }
     apollo_checks_done = 1;
@@ -378,7 +378,7 @@ static void check_apollo_conflicts(void)
 }
 
 
-void cpu_opts(void *opts,section *sec)
+void cpu_opts(void *opts)
 /* set cpu options for following atoms */
 {
   int cmd = ((optcmd *)opts)->cmd;
@@ -469,7 +469,7 @@ static void add_cpu_opt(section *s,int cmd,int arg)
     new->cmd = cmd;
     new->arg = arg;
     add_atom(s,new_opts_atom(new));
-    cpu_opts(new,s);
+    cpu_opts(new);
   }
   else {
     /* no section known at this point, so set the option immediately: it will
@@ -478,7 +478,7 @@ static void add_cpu_opt(section *s,int cmd,int arg)
 
     o.cmd = cmd;
     o.arg = arg;
-    cpu_opts(&o,s);
+    cpu_opts(&o);
   }
 }
 
@@ -1163,7 +1163,7 @@ static char *getspecreg(char *s,operand *op,int first,int last,int cpuchk)
     int i;
     hashdata data;
 
-    if (!find_namelen_nc(spechash,p,q-p,&data)) {
+    if (!find_namelen(spechash,p,q-p,&data)) {
       i = -1;
       if (cpu_type & apollo) {  /* handle Apollo En registers as regsyms */
         regsym *sym;
@@ -1215,7 +1215,7 @@ static char *getctrlreg(char *s,operand *op,int first,int last)
     int i;
     hashdata data;
 
-    if (find_namelen_nc(movchash,p,q-p,&data)) {
+    if (find_namelen(movchash,p,q-p,&data)) {
       i = data.idx;
       if (i>=first && i<=last && (SpecRegs[i].available & cpu_type)) {
         op->mode = MODE_SpecReg;
@@ -5631,7 +5631,7 @@ int init_cpu(void)
     /* remove gas mnemonics from the hash table */
     for (i=0; i<mnemonic_cnt; i++) {
       if (mnemonics[i].ext.available & mgas) {
-        rem_hashentry(mnemohash,mnemonics[i].name,0);
+        rem_hashentry(mnemohash,mnemonics[i].name);
         while (i+1<mnemonic_cnt &&
                !strcmp(mnemonics[i].name,mnemonics[i+1].name))
           i++;
@@ -5658,15 +5658,15 @@ int init_cpu(void)
   }
 
   /* predefine some register symbols */
-  new_regsym(0,0,elfregs?"%sp":"sp",RSTYPE_An,0,7);
-  new_regsym(0,0,elfregs?"%fp":"fp",RSTYPE_An,0,6);
+  new_regsym(0,elfregs?"%sp":"sp",RSTYPE_An,0,7);
+  new_regsym(0,elfregs?"%fp":"fp",RSTYPE_An,0,6);
 
   /* build hash table for special register names */
-  spechash = new_hashtable(0x1000);
-  movchash = new_hashtable(0x800);
+  spechash = new_hashtable_nc(0x1000);
+  movchash = new_hashtable_nc(0x800);
   for (i=0; i<specreg_cnt; i++) {
     data.idx = i;
-    add_hashentry(i<FIRST_CTRLREG?spechash:movchash,SpecRegs[i].name,data,1);
+    add_hashentry(i<FIRST_CTRLREG?spechash:movchash,SpecRegs[i].name,data);
   }
   if (debug && spechash->collisions)
     fprintf(stderr,"*** %d special register collisions!!\n",spechash->collisions);
@@ -6461,14 +6461,14 @@ int parse_cpu_label(char *labname,char **start)
 
       s = skip(s);
       if ((r = getreg(&s,0)) >= 0)
-        new_regsym(regsymredef,0,labname,
+        new_regsym(regsymredef,labname,
                    REGisAn(r)?RSTYPE_An:RSTYPE_Dn,0,REGget(r));
       else if ((r = getfreg(&s)) >= 0)
-        new_regsym(regsymredef,0,labname,RSTYPE_FPn,0,r);
+        new_regsym(regsymredef,labname,RSTYPE_FPn,0,r);
       else if ((r = getbreg(&s)) >= 0)
-        new_regsym(regsymredef,0,labname,RSTYPE_Bn,0,r);
+        new_regsym(regsymredef,labname,RSTYPE_Bn,0,r);
       else if (upd = getspecreg(s,&dummy,REG_VX00,REG_VX23,0)) {
-        new_regsym(regsymredef,0,labname,RSTYPE_En,0,
+        new_regsym(regsymredef,labname,RSTYPE_En,0,
                    (unsigned char)dummy.reg);
         s = upd;
       }

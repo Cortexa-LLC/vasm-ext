@@ -31,7 +31,7 @@ static uint32_t add_strt(const char *name)
 {
   hashdata data;
 
-  if (!find_name(strtab_hash,name,&data)) {
+  if (!find_name_c(strtab_hash,name,&data)) {
     struct aof_strtab *new = mymalloc(sizeof(struct aof_strtab));
 
     new->next = NULL;
@@ -45,7 +45,7 @@ static uint32_t add_strt(const char *name)
     else
       strtab_first = strtab_last = new;
     data.ptr = new;
-    add_hashentry(strtab_hash,name,data,0);
+    add_hashentry_c(strtab_hash,name,data);
   }
   return ((struct aof_strtab *)data.ptr)->offs;
 }
