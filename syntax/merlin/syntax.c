@@ -255,18 +255,10 @@ char *exp_skip(char *s)
 
 static char *skip_operand(int instoper,char *s)
 {
-#ifdef VASM_CPU_Z80
-  unsigned char lastuc = 0;
-#endif
   int par_cnt = 0;
   char c = 0;
 
   for (;;) {
-#ifdef VASM_CPU_Z80
-    s = exp_skip(s);  /* @@@ why do we need that? */
-    if (c)
-      lastuc = toupper((unsigned char)*(s-1));
-#endif
     c = *s;
 
     if (START_PARENTH(c))
@@ -277,12 +269,7 @@ static char *skip_operand(int instoper,char *s)
       else
         syntax_error(3);  /* too many closing parentheses */
     }
-#ifdef VASM_CPU_Z80
-    /* For the Z80 ignore ' behind a letter, as it may be a register */
-    else if ((c=='\'' && (lastuc<'A' || lastuc>'Z')) || c=='\"') {
-#else
     else if (c=='\'' || c=='\"') {
-#endif
       /* a quote expects just a single character with an optional
          quote character following it */
       if (*(s+1) != '\0') {
@@ -381,7 +368,7 @@ static void handle_data_mod(char *s,int size,expr *tree)
       if (parse_operand(opstart,s-opstart,op,DATA_OPERAND(size))) {
         atom *a;
 
-#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
+#ifdef VASM_CPU_650X
         if (mod != NULL) {
           expr *tmpvalue = *mod = op->value;
           op->value = copy_tree(tree);
@@ -396,7 +383,7 @@ static void handle_data_mod(char *s,int size,expr *tree)
         syntax_error(8);  /* invalid data operand */
     }
     else {  /* got string in dblock */
-#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
+#ifdef VASM_CPU_650X
       if (mod!=NULL && size==8) {
         /* make a defblock with an operand expression for each character */
         char buf[8];
@@ -646,7 +633,7 @@ static void handle_taddr(char *s)
 }
 
 
-#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
+#ifdef VASM_CPU_650X
 static void handle_d8_mod(char *s)
 {
   expr *modtree = parse_expr(&s);
@@ -2751,14 +2738,13 @@ struct {
   "data",handle_secdata,
   /* "text" - Merlin TEXT directive for source listing path */
   "bss",handle_secbss,
-#if defined(VASM_CPU_650X) || defined(VASM_CPU_Z80) || defined(VASM_CPU_6800)
+#ifdef VASM_CPU_650X
   "abyte",handle_d8_mod,
 #endif
   "asc",handle_ascii,
   "ascii",handle_ascii,
   "asciiz",handle_string,
   "string",handle_string,
-  "str",handle_str,  /* GMGM */
   "defm",handle_text,
   "fcc",handle_text,
   "fcs",handle_fcs,
@@ -2768,13 +2754,11 @@ struct {
   "db",handle_d8,
   "dfb",handle_d8,
   "defb",handle_d8,
-  "byt",handle_d8,
   "fdb",handle_dblbyt,
   "ddb",handle_ddb,          /* Merlin DDB - big-endian word */
   "wrd",DATWORD,
   "wor",DATWORD,
   "word",DATWORD,
-  "wrd",DATWORD,
   "dw",DATWORD,
   "dfw",DATWORD,
   "defw",DATWORD,
@@ -2880,10 +2864,9 @@ struct {
   "fail",handle_fail,
   "section",handle_section,
   "dsect",handle_dsect,
-  "dend",handle_dend,
+  "dend",handle_dend,    /* Merlin DEND - end dummy section */
   "dum",handle_dsect,    /* Merlin DUM - dummy section start */
   "dummy",handle_dsect,  /* Merlin DUM - dummy section start (long form) */
-  "dend",handle_dend,    /* Merlin DEND - end dummy section */
   "ed",handle_dend,      /* Merlin DEND - end dummy (alias) */
   "binary",handle_incbin,
   "inb",handle_incbin,   /* Merlin PUTBIN - include binary (alias) */
@@ -2916,7 +2899,6 @@ struct {
   "or",handle_org,        /* .OR - origin (alias for org) */
   "bs",handle_spc8,       /* .BS - block storage (alias for ds) */
   "do",handle_ifne,       /* .DO - conditional start (like if) */
-  "else",handle_else,     /* .ELSE - conditional else clause */
   "fin",handle_fin,       /* .FIN - Merlin tolerant conditional end */
   /* Merlin string directives */
   "asc",handle_as,        /* ASC - ASCII string */
@@ -3338,18 +3320,8 @@ static char *read_next_statement(void)
 
   /* find next statement delimiter in line buffer */
   for (;;) {
-#ifdef VASM_CPU_Z80
-    unsigned char lastuc;
-#endif
-
     c = *s;
-#ifdef VASM_CPU_Z80
-    /* For the Z80 ignore ' behind a letter, as it may be a register */
-    lastuc = toupper((unsigned char)*(s-1));
-    if ((c=='\'' && (lastuc<'A' || lastuc>'Z')) || c=='\"') {
-#else
     if (c=='\'' || c=='\"') {
-#endif
       s = skip_string(s,c,NULL);
     }
     else if (c==STATEMENT_DELIMITER && s[1]!='-' && s[1]!='+') {
@@ -3950,18 +3922,8 @@ char *const_prefix(char *s,int *base)
     }
 #endif
   }
-#if defined(VASM_CPU_Z80)
-  if ((*s=='&' || *s=='#') && isxdigit((unsigned char)s[1])) {
-    *base = 16;
-    return s+1;
-  }
-#endif
   if (*s=='@') {
-#if defined(VASM_CPU_Z80)
-    *base = 2;
-#else
     *base = 8;
-#endif
     return s+1;
   }
   if (*s == '%') {
