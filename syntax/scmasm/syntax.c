@@ -592,18 +592,6 @@ static void do_text(char *s,unsigned char add)
     syntax_error(8);  /* invalid data operand */
 }
 
-
-static void handle_sectext(char *s)
-{
-  if (sect_directives) {
-    set_section(new_section(dotdirs?textname:textname+1,textattr,1));
-    eol(s);
-  }
-  else
-    do_text(s,0);
-}
-
-
 static void handle_text(char *s)
 {
   do_text(s,0);
@@ -1903,35 +1891,6 @@ static void handle_incdir(char *s)
     new_include_path(name->str);
   eol(s);
 }
-
-
-/* SCASM: Try to find file with various source extensions */
-static char *try_source_extensions(const char *basename)
-{
-  static const char *exts[] = { "", ".s", ".S", ".asm", ".ASM", NULL };
-  char *testname;
-  FILE *f;
-  int i;
-
-  for (i = 0; exts[i] != NULL; i++) {
-    size_t len = strlen(basename) + strlen(exts[i]) + 1;
-    testname = mymalloc(len);
-    strcpy(testname, basename);
-    strcat(testname, exts[i]);
-
-    /* Try to open the file to see if it exists - use simple fopen */
-    /* This checks current directory only, but include_source will */
-    /* check include paths, so it's ok if we don't find it here */
-    if (f = fopen(testname, "r")) {
-      fclose(f);
-      return testname;  /* Found it! */
-    }
-    myfree(testname);
-  }
-
-  return NULL;  /* Not found with any extension */
-}
-
 
 static void handle_include(char *s)
 {
@@ -3551,20 +3510,6 @@ char *const_suffix(char *start,char *end)
     return end+1;
 
   return end;
-}
-
-
-static char *skip_local(char *p)
-{
-  if (ISIDSTART(*p) || isdigit((unsigned char)*p)) {  /* may start with digit */
-    p++;
-    while (ISIDCHAR(*p))
-      p++;
-  }
-  else
-    p = NULL;
-
-  return p;
 }
 
 

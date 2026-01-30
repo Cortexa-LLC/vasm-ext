@@ -674,18 +674,6 @@ static void do_text(char *s,unsigned char add)
     syntax_error(8);  /* invalid data operand */
 }
 
-
-static void handle_sectext(char *s)
-{
-  if (sect_directives) {
-    set_section(new_section(dotdirs?textname:textname+1,textattr,1));
-    eol(s);
-  }
-  else
-    do_text(s,0);
-}
-
-
 static void handle_text(char *s)
 {
   do_text(s,0);
@@ -1431,14 +1419,6 @@ static void handle_longi(char *s)
   set_65816_sizes(8, mode ? 16 : 8);
 
   eol(s);
-}
-
-
-static void handle_str_cr(char *s)  /* String with CR terminator */
-{
-  expr *fill = number_expr(13);
-  handle_data(s,8);
-  add_atom(0,new_space_atom(number_expr(1),1,fill));  /* terminating CR */
 }
 
 
@@ -2217,13 +2197,6 @@ static void handle_einline(char *s)
   }
   else
     syntax_error(17);  /* einline without inline */
-}
-
-
-/* Merlin: No-op handler for editor directives that should be ignored */
-static void handle_noop(char *s)
-{
-  /* Silently ignore the directive and its arguments */
 }
 
 /* Merlin: ENT - Entry point (export symbol) */
