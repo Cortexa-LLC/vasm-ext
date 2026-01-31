@@ -2698,225 +2698,106 @@ struct {
   const char *name;
   void (*func)(char *);
 } directives[] = {
-  "org",handle_org,
-  "rorg",handle_rorg,
-  "rend",handle_rend,
-  "phase",handle_rorg,
-  "dephase",handle_rend,
-  "ph",handle_rorg,      /* Merlin PH - phase start (rorg) */
-  "ep",handle_rend,      /* Merlin EP - end phase */
-  "roffs",handle_roffs,
-  "align",handle_align,
-  "even",handle_even,
-  "data",handle_secdata,
-  /* "text" - Merlin TEXT directive for source listing path */
-  "bss",handle_secbss,
-#ifdef VASM_CPU_650X
-  "abyte",handle_d8_mod,
-#endif
-  "asc",handle_ascii,
-  "ascii",handle_ascii,
-  "asciiz",handle_string,
-  "string",handle_string,
-  "defm",handle_text,
-  "fcc",handle_text,
-  "fcs",handle_fcs,
-  "fcb",handle_d8,
-  "byt",handle_d8,
-  "byte",handle_d8,
-  "db",handle_d8,
-  "dfb",handle_d8,
-  "defb",handle_d8,
-  "fdb",handle_dblbyt,
-  "ddb",handle_ddb,          /* Merlin DDB - big-endian word */
-  "wrd",DATWORD,
-  "wor",DATWORD,
-  "word",DATWORD,
-  "dw",DATWORD,
-  "dfw",DATWORD,
-  "defw",DATWORD,
-  "dl",DATLONG,
-  "defl",DATLONG,
-  "dd",DATDWRD,
-#if !defined(VASM_CPU_6809)  /* clash with 6309 ADDR instruction */
-  "addr",handle_taddr,
-#endif
-  "da",handle_taddr,
-  "defp",handle_taddr,
-  "adrl",handle_adrl,        /* Merlin ADRL - 32-bit address */
-  "ds",handle_spc8,
-  "dsb",handle_spc8,
-  "fill",handle_spc8,
-  "reserve",handle_spc8,
-  "spc",handle_spc8,
-  "defs",handle_spc8,
-  "bsz",handle_spc8,
-  "zmb",handle_spc8,
-  "dc",handle_spc8,
-  "blk",handle_spc8,
-#if !defined(VASM_CPU_650X)
-  "rmb",handle_spc8,
-#endif
-  "dsw",SPCWORD,
-  "blkw",SPCWORD,
-  "dsl",SPCLONG,
-  "blkl",SPCLONG,
-  "di8",handle_d8,
-  "di16",handle_d16,
-  "di24",handle_d24,
-  "di32",handle_d32,
-  "di64",handle_d64,
-  "ds8",handle_spc8,
-  "ds16",handle_spc16,
-  "ds24",handle_spc24,
-  "ds32",handle_spc32,
-  "ds64",handle_spc64,
-  "assert",handle_assert,
-#if defined(VASM_CPU_TR3200) /* Clash with IFxx instructions of TR3200 cpu */
-  "if_def",handle_ifd,
-  "if_ndef",handle_ifnd,
-  "if_blank",handle_ifblank,
-  "if_nblank",handle_ifnblank,
-  "if_eq",handle_ifeq,
-  "if_ne",handle_ifne,
-  "if_gt",handle_ifgt,
-  "if_ge",handle_ifge,
-  "if_lt",handle_iflt,
-  "if_le",handle_ifle,
-  "if_used",handle_ifused,
-  "if_nused",handle_ifnused,
-#else
-  "ifdef",handle_ifd,
-  "ifndef",handle_ifnd,
-  "ifblank",handle_ifblank,
-  "ifnblank",handle_ifnblank,
-  "ifd",handle_ifd,
-  "ifnd",handle_ifnd,
-  "ifeq",handle_ifeq,
-  "ifne",handle_ifne,
-  "ifgt",handle_ifgt,
-  "ifge",handle_ifge,
-  "iflt",handle_iflt,
-  "ifle",handle_ifle,
-  "ifused",handle_ifused,
-  "ifnused",handle_ifnused,
-#endif
-  "if",handle_ifne,
-  "else",handle_else,
-  "el",handle_else,
-  "endif",handle_endif,
-#if !defined(VASM_CPU_Z80) && !defined(VASM_CPU_6800) && !defined(VASM_CPU_SPC700)
-  "ei",handle_endif,  /* clashes with cpu mnemonic */
-#endif
-  "fi",handle_endif,  /* GMGM */
-  "incbin",handle_incbin,
-  "mdat",handle_incbin,
-  "incdir",handle_incdir,
-  "include",handle_include,
-  "put",handle_include,      /* Merlin PUT - include source file */
-  "use",handle_use,          /* Merlin USE - include macro library */
-  "rel",handle_rel,          /* Merlin REL - relocatable output */
-  "dsk",handle_dsk,          /* Merlin DSK - output disk file name */
-  "rept",handle_rept,
-  "repeat",handle_rept,
-  "lup",handle_rept,         /* Merlin LUP - loop directive */
-  "endr",handle_endr,
-  "endrep",handle_endr,
-  "endrepeat",handle_endr,
+  /* Assembly control - Merlin directives only */
+  "org",handle_org,          /* ORG - Set origin */
+  "ph",handle_rorg,          /* PH - Phase start (rorg) */
+  "ep",handle_rend,          /* EP - End phase */
+  "end",handle_end,          /* END - End assembly */
+  "or",handle_org,           /* OR - Origin (alias for ORG) */
+
+  /* Section management */
+  "section",handle_section,  /* vasm section support */
+
+  /* Data definition - Byte */
+  "db",handle_d8,            /* DB - Define byte (Merlin alias) */
+  "dfb",handle_d8,           /* DFB - Define byte */
+  "ddb",handle_ddb,          /* DDB - Big-endian word */
+
+  /* Data definition - Word/Address */
+  "dw",DATWORD,              /* DW - Define word (alias for DA) */
+  "da",handle_taddr,         /* DA - Define address */
+  "adrl",handle_adrl,        /* ADRL - 32-bit address (65816) */
+
+  /* Reserve space */
+  "ds",handle_spc8,          /* DS - Define storage */
+  "bs",handle_spc8,          /* BS - Block storage */
+
+  /* Conditional assembly */
+  "do",handle_ifne,          /* DO - Conditional start */
+  "else",handle_else,        /* ELSE - Alternate block */
+  "fin",handle_fin,          /* FIN - End conditional */
+
+  /* Include files */
+  "mdat",handle_incbin,      /* MDAT - Include binary */
+  "inb",handle_incbin,       /* INB - Include binary (alias) */
+  "put",handle_include,      /* PUT - Include source file */
+
+  /* Repeat/Loop */
+  "lup",handle_rept,         /* LUP - Loop directive */
+
+  /* Macros */
 #if !defined(VASM_CPU_UNSP)
-  "mac",handle_macro, /* Clashes with unSP instruction */
+  "mac",handle_macro,        /* MAC - Begin macro */
 #endif
-  "ma",handle_macro,   /* Merlin MAC macro directive (alternate name) */
-  "macro",handle_macro,
-  "em",handle_endm,    /* Merlin <<< endmacro directive (alternate name) */
-  "endm",handle_endm,
-  "endmac",handle_endm,
-  "endmacro",handle_endm,
-  "end",handle_end,
-  "exitmacro",handle_exitmacro,
-  "fail",handle_fail,
-  "section",handle_section,
-  "dsect",handle_dsect,
-  "dend",handle_dend,    /* Merlin DEND - end dummy section */
-  "dum",handle_dsect,    /* Merlin DUM - dummy section start */
-  "dummy",handle_dsect,  /* Merlin DUM - dummy section start (long form) */
-  "ed",handle_dend,      /* Merlin DEND - end dummy (alias) */
-  "binary",handle_incbin,
-  "inb",handle_incbin,   /* Merlin PUTBIN - include binary (alias) */
-  "defc",handle_defc,
-  "xdef",handle_global,
-  "xref",handle_global,
-  "lib",handle_global,
-  "xlib",handle_global,
-  "global",handle_global,
-  "extern",handle_global,
-  "local",handle_local,
-  "weak",handle_weak,
-  "needs",handle_symdepend,
-  "symdepend",handle_symdepend,
-  "list",handle_list,
-  "lst",handle_list,         /* Merlin LST - list control */
-  "lstdo",handle_list,       /* Merlin LSTDO - list DO blocks */
-  "nolist",handle_nolist,
-  "struct",handle_struct,
-  "structure",handle_struct,
-  "endstruct",handle_endstruct,
-  "endstructure",handle_endstruct,
-  "inline",handle_inline,
-  "einline",handle_einline,
-  "nam",handle_listttl,
-  "subttl",handle_listsubttl,
-  "page",handle_listpage,
-  "space",handle_listspace,
-  /* Merlin-specific directive aliases */
-  "or",handle_org,        /* .OR - origin (alias for org) */
-  "bs",handle_spc8,       /* .BS - block storage (alias for ds) */
-  "do",handle_ifne,       /* .DO - conditional start (like if) */
-  "fin",handle_fin,       /* .FIN - Merlin tolerant conditional end */
-  /* Merlin string directives */
-  "asc",handle_as,        /* ASC - ASCII string */
-  "dci",handle_at,        /* DCI - ASCII with high bit inverted on last char */
-  "inv",handle_inv,       /* INV - all chars with high bit set */
-  "fls",handle_fls,       /* FLS - flashing (alternating high bit) */
-  "rev",handle_rev,       /* REV - reversed byte order */
-  "str",handle_str,       /* STR - 1-byte length prefix */
-  "strl",handle_strl,     /* STRL - 2-byte length prefix */
-  "hex",handle_hs,        /* HEX - hex string */
-  /* Alternative directive names */
-  "as",handle_as,         /* AS - ASCII string (alternative name) */
-  "az",handle_az,         /* AZ - ASCII zero-terminated */
-  "at",handle_at,         /* AT - DCI (alternative name) */
-  "hs",handle_hs,         /* HS - hex string (alternative name) */
-  "op",handle_op,         /* .OP - select CPU type (6502/65C02/65816) */
-  /* Merlin 65816 CPU mode directives */
-  "mx",handle_mx,         /* MX - set M and X processor flags */
-  "xc",handle_op,         /* XC - change CPU type (alias for OP) */
-  "longa",handle_longa,   /* LONGA ON/OFF - 16-bit accumulator mode */
-  "longi",handle_longi,   /* LONGI ON/OFF - 16-bit index register mode */
-  /* Merlin macro invocation */
-  "pmc",handle_pmc,       /* PMC - explicit macro call */
-  /* Merlin linking directives */
-  "ent",handle_ent,       /* ENT - Entry point (export symbol) */
-  "ext",handle_ext,       /* EXT - External symbol (import symbol) */
-  /* Merlin output control */
-  "sav",handle_sav,       /* SAV - Save (set output filename) */
-  "err",handle_err,       /* ERR - User-defined error message */
-  "typ",handle_typ,       /* TYP - ProDOS file type */
-  "aux",handle_aux,       /* AUX - ProDOS auxiliary type */
-  /* Merlin addressing mode control */
-  "tr",handle_tr,         /* TR - Truncate addressing mode */
-  /* Merlin listing control */
-  "exp",handle_exp,       /* EXP - Expand macros in listing */
-  "obj",handle_obj,       /* OBJ - Object code listing control */
-  "cyc",handle_cyc,       /* CYC - Cycle counting */
-  /* Merlin OMF directives */
-  "knd",handle_knd,       /* KND - OMF segment kind */
-  "ali",handle_ali,       /* ALI - OMF alignment */
-  "lnk",handle_lnk,       /* LNK - Linker script generation */
-  /* Merlin assembly utility directives */
-  "chk",handle_chk,       /* CHK - Checksum byte */
-  "dat",handle_dat,       /* DAT - Date/time stamp */
-  "usr",handle_usr        /* USR - ProDOS MLI call (no-op in cross-assembly) */
+  "ma",handle_macro,         /* MA - Macro (alternate) */
+  "em",handle_endm,          /* EM - End macro (<<<) */
+  "pmc",handle_pmc,          /* PMC - Print macro control */
+
+  /* Dummy section */
+  "dum",handle_dsect,        /* DUM - Dummy section */
+  "dummy",handle_dsect,      /* DUMMY - Dummy section (long form) */
+  "dend",handle_dend,        /* DEND - End dummy */
+  "ed",handle_dend,          /* ED - End dummy (alias) */
+
+  /* Symbol export/import */
+  "ent",handle_ent,          /* ENT - Entry point */
+  "ext",handle_ext,          /* EXT - External symbol */
+
+  /* Listing control */
+  "list",handle_list,        /* LIST - Listing control */
+  "lst",handle_list,         /* LST - Listing (alternate) */
+  "lstdo",handle_list,       /* LSTDO - List DO blocks */
+
+  /* String directives */
+  "asc",handle_as,           /* ASC - ASCII string */
+  "as",handle_as,            /* AS - ASCII string (alternate) */
+  "at",handle_at,            /* AT - DCI (alternate) */
+  "dci",handle_at,           /* DCI - Inverted last char */
+  "inv",handle_inv,          /* INV - Inverse string */
+  "fls",handle_fls,          /* FLS - Flashing */
+  "rev",handle_rev,          /* REV - Reverse string */
+  "str",handle_str,          /* STR - Pascal string */
+  "strl",handle_strl,        /* STRL - 2-byte length */
+
+  /* Hex string */
+  "hex",handle_hs,           /* HEX - Hex string */
+  "hs",handle_hs,            /* HS - Hex string (alternate) */
+
+  /* CPU selection */
+  "op",handle_op,            /* OP - Select CPU type */
+  "xc",handle_op,            /* XC - Change CPU (alias) */
+  "mx",handle_mx,            /* MX - 65816 register size */
+  "longa",handle_longa,      /* LONGA ON/OFF - 16-bit A */
+  "longi",handle_longi,      /* LONGI ON/OFF - 16-bit X/Y */
+
+  /* Merlin-specific directives */
+  "use",handle_use,          /* USE - Include macro library */
+  "rel",handle_rel,          /* REL - Relocatable output */
+  "dsk",handle_dsk,          /* DSK - Output disk file name */
+  "sav",handle_sav,          /* SAV - Save (output filename) */
+  "err",handle_err,          /* ERR - User error message */
+  "typ",handle_typ,          /* TYP - ProDOS file type */
+  "aux",handle_aux,          /* AUX - ProDOS auxiliary type */
+  "tr",handle_tr,            /* TR - Truncate addressing mode */
+  "exp",handle_exp,          /* EXP - Expand macros listing */
+  "obj",handle_obj,          /* OBJ - Object code listing */
+  "cyc",handle_cyc,          /* CYC - Cycle counting */
+  "knd",handle_knd,          /* KND - OMF segment kind */
+  "ali",handle_ali,          /* ALI - OMF alignment */
+  "lnk",handle_lnk,          /* LNK - Linker script */
+  "chk",handle_chk,          /* CHK - Checksum byte */
+  "dat",handle_dat,          /* DAT - Date/time stamp */
+  "usr",handle_usr           /* USR - ProDOS MLI call */
 };
 
 int dir_cnt = sizeof(directives) / sizeof(directives[0]);

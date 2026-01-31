@@ -2239,195 +2239,51 @@ struct {
   const char *name;
   void (*func)(char *);
 } directives[] = {
-  "org",handle_org,
-  "rorg",handle_rorg,
-  "rend",handle_rend,
-  "phase",handle_rorg,
-  "dephase",handle_rend,
-  "ph",handle_rorg,      /* SCASM: .PH - phase start */
-  "ep",handle_rend,      /* SCASM: .EP - end phase */
-  "roffs",handle_roffs,
-  "align",handle_align,
-  "even",handle_even,
-  "pg",handle_pg,        /* SCASM: .PG - align to 256-byte page boundary */
-  "data",handle_secdata,
-  /* "text" removed - conflicts with SCASM TEXT directive for source listing */
-  "bss",handle_secbss,
-#ifdef VASM_CPU_650X
-  "abyte",handle_d8_mod,
-#endif
-  "asc",handle_ascii,
-  "ascii",handle_ascii,
-  "asciiz",handle_string,
-  "string",handle_string,
-  "str",handle_str,  /* GMGM */
-  "defm",handle_text,
-  "fcc",handle_text,
-  "fcs",handle_fcs,
-  "fcb",handle_d8,
-  "byt",handle_d8,
-  "byte",handle_d8,
-  "db",handle_d8,
-  "dfb",handle_d8,
-  "defb",handle_d8,
-  "fdb",handle_dblbyt,
-  "wrd",DATWORD,
-  "wor",DATWORD,
-  "word",DATWORD,
-  "dw",DATWORD,
-  "dfw",DATWORD,
-  "defw",DATWORD,
-  "dl",DATLONG,
-  "defl",DATLONG,
-  "dd",DATDWRD,
-#if !defined(VASM_CPU_6809)  /* clash with 6309 ADDR instruction */
-  "addr",handle_taddr,
-#endif
-  "da",handle_taddr,
-  "defp",handle_taddr,
-  "ds",handle_spc8,
-  "dsb",handle_spc8,
-  "fill",handle_spc8,
-  "reserve",handle_spc8,
-  "spc",handle_spc8,
-  "defs",handle_spc8,
-  "bsz",handle_spc8,
-  "zmb",handle_spc8,
-  "dc",handle_spc8,
-  "blk",handle_spc8,
-#if !defined(VASM_CPU_650X)
-  "rmb",handle_spc8,
-#endif
-  "dsw",SPCWORD,
-  "blkw",SPCWORD,
-  "dsl",SPCLONG,
-  "blkl",SPCLONG,
-  "di8",handle_d8,
-  "di16",handle_d16,
-  "di24",handle_d24,
-  "di32",handle_d32,
-  "di64",handle_d64,
-  "ds8",handle_spc8,
-  "ds16",handle_spc16,
-  "ds24",handle_spc24,
-  "ds32",handle_spc32,
-  "ds64",handle_spc64,
-  "assert",handle_assert,
-#if defined(VASM_CPU_TR3200) /* Clash with IFxx instructions of TR3200 cpu */
-  "if_def",handle_ifd,
-  "if_ndef",handle_ifnd,
-  "if_blank",handle_ifblank,
-  "if_nblank",handle_ifnblank,
-  "if_eq",handle_ifeq,
-  "if_ne",handle_ifne,
-  "if_gt",handle_ifgt,
-  "if_ge",handle_ifge,
-  "if_lt",handle_iflt,
-  "if_le",handle_ifle,
-  "if_used",handle_ifused,
-  "if_nused",handle_ifnused,
-#else
-  "ifdef",handle_ifd,
-  "ifndef",handle_ifnd,
-  "ifblank",handle_ifblank,
-  "ifnblank",handle_ifnblank,
-  "ifd",handle_ifd,
-  "ifnd",handle_ifnd,
-  "ifeq",handle_ifeq,
-  "ifne",handle_ifne,
-  "ifgt",handle_ifgt,
-  "ifge",handle_ifge,
-  "iflt",handle_iflt,
-  "ifle",handle_ifle,
-  "ifused",handle_ifused,
-  "ifnused",handle_ifnused,
-#endif
-  "if",handle_ifne,
-  "else",handle_else,
-  "el",handle_else,
-  "endif",handle_endif,
-#if !defined(VASM_CPU_Z80) && !defined(VASM_CPU_6800) && !defined(VASM_CPU_SPC700)
-  "ei",handle_endif,  /* clashes with cpu mnemonic */
-#endif
-  "fi",handle_endif,  /* GMGM */
-  "incbin",handle_incbin,
-  "mdat",handle_incbin,
-  "incdir",handle_incdir,
-  "include",handle_include,
-  "in",handle_include,   /* SCASM: .IN - include file (2-char alias) */
-  "rept",handle_rept,
-  "repeat",handle_rept,
-  "lu",handle_rept,      /* SCASM: .LU - loop (2-char alias) */
-  "endr",handle_endr,
-  "endrep",handle_endr,
-  "endrepeat",handle_endr,
-  "endu",handle_endr,    /* SCASM: .ENDU - end loop (4-char alias) */
-#if !defined(VASM_CPU_UNSP)
-  "mac",handle_macro, /* Clashes with unSP instruction */
-#endif
-  "ma",handle_macro,   /* SCASM macro directive */
-  "macro",handle_macro,
-  "em",handle_endm,    /* SCASM endmacro directive */
-  "endm",handle_endm,
-  "endmac",handle_endm,
-  "endmacro",handle_endm,
-  "end",handle_end,
-  "exitmacro",handle_exitmacro,
-  "fail",handle_fail,
-  "section",handle_section,
-  "dsect",handle_dsect,
-  "dend",handle_dend,
-  "dummy",handle_dsect,  /* SCASM: .DUMMY - dummy section start */
-  "ed",handle_dend,      /* SCASM: .ED - end dummy */
-  "binary",handle_incbin,
-  "inb",handle_include,  /* SCASM: .INB - include source file (same as .IN) */
-  "defc",handle_defc,
-  "xdef",handle_global,
-  "xref",handle_global,
-  "lib",handle_global,
-  "xlib",handle_global,
-  "global",handle_global,
-  "extern",handle_global,
-  "local",handle_local,
-  "weak",handle_weak,
-  "needs",handle_symdepend,
-  "symdepend",handle_symdepend,
-  "list",handle_list,
-  "nolist",handle_nolist,
-  "struct",handle_struct,
-  "structure",handle_struct,
-  "endstruct",handle_endstruct,
-  "endstructure",handle_endstruct,
-  "inline",handle_inline,
-  "einline",handle_einline,
-  "nam",handle_listttl,
-  "subttl",handle_listsubttl,
-  "page",handle_listpage,
-  "space",handle_listspace,
-  /* SCASM-specific directive aliases */
-  "or",handle_org,        /* .OR - origin (alias for org) */
+  /* Core SCASM directives */
+  "or",handle_org,        /* .OR - origin */
+  "eq",handle_defc,       /* .EQ - equate (define constant) */
+  "se",handle_defc,       /* .SE - set equate (alias for .EQ) */
+  "da",handle_taddr,      /* .DA - define address */
   "hs",handle_hs,         /* .HS - hex string */
-  "bs",handle_spc8,       /* .BS - block storage (alias for ds) */
-  "do",handle_ifne,       /* .DO - conditional start (like if) */
-  "fin",handle_endif,     /* .FIN - conditional end (alias for endif) */
   "as",handle_as,         /* .AS - ASCII string with flexible delimiters */
-  "ac",handle_ac,         /* .AC - ASCII string with optional numeric prefix */
-  "az",handle_az,         /* .AZ - ASCII zero-terminated with flexible delimiters */
   "at",handle_at,         /* .AT - ASCII with high bit set on last char */
-  "cs",handle_cs,         /* .CS - C-string with escape sequences (SCASM 3.1) */
-  "cz",handle_cz,         /* .CZ - C-string zero-terminated (SCASM 3.1) */
-  "hx",handle_hx,         /* .HX - Hex nibble storage (SCASM 3.1) */
-  "ps",handle_ps,         /* .PS - Pascal string (length-prefixed) (SCASM 3.1) */
+  "az",handle_az,         /* .AZ - ASCII zero-terminated with flexible delimiters */
+  "bs",handle_spc8,       /* .BS - block storage */
+  "dfb",handle_d8,        /* .DFB - define byte */
+  "ma",handle_macro,      /* .MA - macro definition */
+  "em",handle_endm,       /* .EM - end macro */
+  "do",handle_ifne,       /* .DO - conditional start */
+  "else",handle_else,     /* .ELSE - conditional else */
+  "fin",handle_endif,     /* .FIN - conditional end */
+  "lu",handle_rept,       /* .LU - loop start */
+  "endu",handle_endr,     /* .ENDU - end loop */
+  "ph",handle_rorg,       /* .PH - phase start */
+  "ep",handle_rend,       /* .EP - end phase */
+  "dummy",handle_dsect,   /* .DUMMY - dummy section start */
+  "ed",handle_dend,       /* .ED - end dummy */
+  "in",handle_include,    /* .IN - include file */
+
+  /* SCASM v3.0+ extensions */
+  "cs",handle_cs,         /* .CS - C-string with escape sequences */
+  "cz",handle_cz,         /* .CZ - C-string zero-terminated */
+  "hx",handle_hx,         /* .HX - Hex nibble storage */
+  "ps",handle_ps,         /* .PS - Pascal string (length-prefixed) */
   "ta",handle_ta,         /* .TA - Target Address (ignored in cross-assembly) */
   "op",handle_op,         /* .OP - select CPU type (6502/65C02/65816) */
+  "tf",handle_tf,         /* .TF - Target file metadata */
+  "list",handle_list,     /* .LIST - enable listing */
+
   /* SCASM editor directives */
   "new",handle_noop,      /* NEW - SCASM editor command (clear buffer - ignored) */
   "auto",handle_auto,     /* AUTO - Automatic line numbering (consumed) */
-  "tf",handle_tf,         /* .TF - Target file metadata (extracted for build) */
-  "text",handle_text_directive,  /* TEXT - Source listing path (extracted) */
-  /* SCASM listing control directives */
+  "text",handle_text_directive,  /* TEXT - Source listing path */
   "lif",handle_lif,       /* .LIF - List IF (toggle listing control) */
-  "ti",handle_ti          /* .TI - Title (set listing title) */
+  "ti",handle_ti,         /* .TI - Title (set listing title) */
+
+  /* Additional common aliases without dots */
+  "inb",handle_include,   /* .INB - include source file (same as .IN) */
+  "pg",handle_pg,         /* .PG - align to 256-byte page boundary */
+  "ac",handle_ac          /* .AC - ASCII string with optional numeric prefix */
 };
 
 int dir_cnt = sizeof(directives) / sizeof(directives[0]);
