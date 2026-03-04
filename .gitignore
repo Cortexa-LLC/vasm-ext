@@ -40,3 +40,7 @@ vasm-upstream-temp/
 
 # Scripts for maintenance (keep tracked)
 !*.sh
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
