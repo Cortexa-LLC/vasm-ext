@@ -1,3 +1,6 @@
+> [!WARNING]
+> **DEPRECATED — no longer maintained.** This project was the predecessor to [xasm++](https://github.com/Cortexa-LLC/xasm-plus-plus), a ground-up modern C++20 cross-assembler that supersedes these vasm syntax extensions. Use xasm++ instead.
+
 # vasm - Portable and Retargetable Assembler
 
 **Version:** 2.0e (based on vasm 2.0e pre-release with SCMASM extensions)
